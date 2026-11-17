@@ -85,11 +85,23 @@ El script muestra un resumen (51 clientes especiales, 28 SKUs, lista general de 
 
 ## Cómo funciona la base
 
-- **niveles**: LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%, ESPECIAL, NO COTIZA.
-- **skus**: el número de SKU es la clave permanente (siempre entero). La descripción se edita en un solo lugar.
-- **clientes**: nombre completo (sin el límite de 31 caracteres del Excel) y código de cliente único.
-- **cliente_skus**: qué SKUs compra cada cliente (su grilla para el envío mensual).
-- **lista_precios**: precio de cada SKU por nivel y mes de vigencia. Se guarda el precio de cada nivel tal cual, porque en algunos SKUs no se aplica el descuento.
-- **precios_cliente**: un precio por cliente, SKU y mes. Si se corrige un precio ya guardado, el valor anterior queda en **precios_cliente_cambios** (no se pierde nada).
+- **clientes**: nombre completo, código de cliente único y **modalidad**:
+  - **Genérico**: paga la lista general menos el descuento de su nivel (LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%). Sus precios se guardan solos al **publicar** cada lista general.
+  - **Especial**: tiene su lista propia. La primera se arma con la lista general menos un descuento elegido; después se maneja con % y a mano en Envío mensual.
+  - **Cotiza** sí/no: un cliente que no cotiza queda bloqueado sin borrarlo.
+- **skus**: el número de SKU es la clave permanente (siempre entero). **Admite descuento** = no: vale el precio de lista en todos los niveles.
+- **lista_general**: un precio de LISTA por SKU y mes, más el **precio mínimo** (piso) de referencia. Los niveles se calculan: LISTA × (1 − descuento), redondeado a 1 decimal.
+- **cliente_skus**: mapa SKU × cliente, qué SKUs se le cotizan a cada uno. Un cliente nuevo arranca con todos los SKUs activos tildados; un SKU nuevo se tilda en todos los genéricos.
+- **precios_cliente**: un precio por cliente, SKU y mes, para todos los clientes, con su **origen** (lista, aumento %, manual, migración). Si se corrige un precio ya guardado, el valor anterior queda en **precios_cliente_cambios**.
 - **precios_competencia**: precios de la competencia por cliente, SKU y mes (pantalla pendiente).
-- Vistas: historial con variación mensual y acumulada, último precio, índice de clientes, resumen mínimo/máximo/promedio por SKU y mes.
+
+## Pantallas
+
+| Pantalla | Para qué |
+|---|---|
+| Envío mensual | Precios del mes de los clientes especiales: % de aumento, edición a mano, lista y mínimo de referencia (en rojo si quedás debajo del piso). |
+| Lista general | Cargar la lista del mes (a mano, con % sobre la anterior o pegando desde Excel), el mínimo, y publicarla a los genéricos. |
+| Clientes | Índice, alta y edición. En la ficha: historial, mapa de SKUs y, para un especial nuevo, armar su primera lista. |
+| Consultas | Por SKU (mín., máx., promedio, mediana y detalle ordenable), ranking de clientes, brecha contra la lista, ficha, envíos del mes, desactualizados y cobertura. Todo se exporta a Excel. |
+| Cotizar | Precios vigentes de un cliente para copiar y enviar. |
+| SKUs | Alta y edición, estado y si admite descuento. |

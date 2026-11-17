@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { nombreMes, precio } from '@/lib/formato'
-import type { Cliente } from '@/lib/tipos'
+import { nombreModalidad, type Cliente } from '@/lib/tipos'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -13,14 +13,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 interface Linea { sku: number; descripcion: string; precio: number; mes: string; origen: string }
 
 export default function Cotizar() {
-  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel' | 'nro_cliente'>[]>([])
+  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel' | 'nro_cliente' | 'modalidad' | 'cotiza'>[]>([])
   const [id, setId] = useState('')
   const [lineas, setLineas] = useState<Linea[]>([])
   const [aviso, setAviso] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
 
   useEffect(() => {
-    supabase.from('clientes').select('id, nombre, nivel, nro_cliente').eq('activo', true).order('nombre')
+    supabase.from('clientes').select('id, nombre, nivel, nro_cliente, modalidad, cotiza').eq('activo', true).order('nombre')
       .then(({ data }) => setClientes(data ?? []))
   }, [])
 
@@ -31,11 +31,11 @@ export default function Cotizar() {
     setAviso(null)
     setCopiado(false)
     if (!cliente) return
-    if (cliente.nivel === 'NO COTIZA') return setAviso('Este cliente está marcado como NO COTIZA.')
+    if (!cliente.cotiza) return setAviso('Este cliente está marcado como NO COTIZA.')
     supabase.rpc('cotizar', { p_cliente_id: cliente.id }).then(({ data, error }) => {
       if (error) return setAviso(mensajeError(error))
       setLineas((data ?? []) as Linea[])
-      if (!data?.length) setAviso(cliente.nivel === 'ESPECIAL' ? 'Este cliente todavía no tiene precios cargados.' : 'No hay lista de precios cargada.')
+      if (!data?.length) setAviso(cliente.modalidad === 'ESPECIAL' ? 'Este cliente todavía no tiene precios cargados.' : 'No hay lista general cargada o el cliente no tiene SKUs tildados.')
     })
   }, [cliente])
 
@@ -54,13 +54,13 @@ export default function Cotizar() {
       <Card>
         <CardHeader>
           <CardTitle>Cotizar a un cliente</CardTitle>
-          <CardDescription>Nivel estándar: precio de lista de su nivel. ESPECIAL: su último precio cargado. NO COTIZA: bloqueado.</CardDescription>
+          <CardDescription>Genérico: lista general vigente menos el descuento de su nivel. Especial: su último precio cargado. No cotiza: bloqueado. Solo SKUs tildados.</CardDescription>
         </CardHeader>
         <CardContent className="grid max-w-xl gap-2">
           <Label htmlFor="cli">Cliente</Label>
           <Select id="cli" value={id} onChange={(e) => setId(e.target.value)}>
             <option value="">Elegí un cliente</option>
-            {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {c.nivel}</option>)}
+            {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {nombreModalidad(c.modalidad)}{c.nivel ? ` ${c.nivel}` : ''}{c.cotiza ? '' : ' · NO COTIZA'}</option>)}
           </Select>
         </CardContent>
       </Card>
@@ -70,7 +70,7 @@ export default function Cotizar() {
       {lineas.length > 0 && (
         <div className="grid gap-3">
           <div className="flex items-center gap-3">
-            <Badge>{cliente?.nivel}</Badge>
+            <Badge>{cliente && nombreModalidad(cliente.modalidad)}{cliente?.nivel ? ` · ${cliente.nivel}` : ''}</Badge>
             <span className="text-sm text-muted-foreground">{lineas.length} SKU(s)</span>
             <Button className="ml-auto" variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓' : 'Copiar para enviar'}</Button>
           </div>

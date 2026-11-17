@@ -10,10 +10,14 @@ import ClienteDetalle from '@/pages/ClienteDetalle'
 import EnvioMensual from '@/pages/EnvioMensual'
 import Cotizar from '@/pages/Cotizar'
 import Skus from '@/pages/Skus'
+import ListaGeneral from '@/pages/ListaGeneral'
+import Consultas from '@/pages/Consultas'
 
 const SECCIONES = [
   { a: '/envio', texto: 'Envío mensual' },
+  { a: '/lista', texto: 'Lista general' },
   { a: '/clientes', texto: 'Clientes' },
+  { a: '/consultas', texto: 'Consultas' },
   { a: '/cotizar', texto: 'Cotizar' },
   { a: '/skus', texto: 'SKUs' },
 ]
@@ -84,6 +88,8 @@ export default function App() {
             <Route path="/envio" element={<EnvioMensual />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<ClienteDetalle />} />
+            <Route path="/lista" element={<ListaGeneral />} />
+            <Route path="/consultas" element={<Consultas />} />
             <Route path="/cotizar" element={<Cotizar />} />
             <Route path="/skus" element={<Skus />} />
             <Route path="*" element={<Navigate to="/envio" replace />} />
