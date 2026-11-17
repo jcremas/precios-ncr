@@ -10,6 +10,7 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 |---|---|
 | `src/` | La app (pantallas: Envío mensual, Clientes, Ficha de cliente con historial, Cotizar, SKUs). |
 | `supabase/migrations/0001_esquema.sql` | Crea las tablas, la seguridad (login + RLS) y las vistas. Se corre una sola vez. |
+| `supabase/migrations/0002_precios_genericos_al_instante.sql` | Precios de los genéricos al instante (al crearlos o cambiarles el nivel). Se corre después de 0001. |
 | `supabase/reset.sql` | Borra todo lo de la app para empezar de cero. |
 | `migracion/importar_excel.py` | Lee el Excel y genera el SQL con los datos iniciales. El Excel y el SQL generado **nunca** se suben. |
 | `.env.example` | Modelo del archivo de claves. El `.env` real no se sube. |
@@ -24,6 +25,7 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 ### 2. Crear las tablas
 1. **Solo si ya habías creado tablas antes y querés empezar de cero:** en Supabase, menú **SQL Editor** → **New query**, pegá todo `supabase/reset.sql` y apretá **Run**. ⚠️ Borra todas las tablas y precios de la app (no se puede deshacer). Los usuarios de login no se tocan. Al final tiene que mostrar una tabla vacía (0 filas).
 2. **New query** otra vez: abrí `supabase/migrations/0001_esquema.sql`, copiá todo, pegalo y apretá **Run**. Tiene que decir *Success*.
+3. **New query** otra vez con `supabase/migrations/0002_precios_genericos_al_instante.sql` → **Run**. Hace que un cliente genérico tenga sus precios apenas se crea o se le cambia el nivel. Se puede correr más de una vez sin problema.
 
 ### 3. Cerrar el registro público y crear tu usuario
 1. **Authentication → Sign In / Providers → Email**: dejá Email activado y **desactivá "Allow new users to sign up"**. Así nadie se puede registrar solo.
@@ -86,7 +88,7 @@ El script muestra un resumen (51 clientes especiales, 28 SKUs, lista general de 
 ## Cómo funciona la base
 
 - **clientes**: nombre completo, código de cliente único y **modalidad**:
-  - **Genérico**: paga la lista general menos el descuento de su nivel (LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%). Sus precios se guardan solos al **publicar** cada lista general.
+  - **Genérico**: paga la lista general menos el descuento de su nivel (LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%). Sus precios se guardan solos al **crearlo**, al **cambiarle el nivel**, al **tildarle un SKU** (mes actual, con la lista vigente) y al **publicar** cada lista general. Los meses anteriores no se tocan.
   - **Especial**: tiene su lista propia. La primera se arma con la lista general menos un descuento elegido; después se maneja con % y a mano en Envío mensual.
   - **Cotiza** sí/no: un cliente que no cotiza queda bloqueado sin borrarlo.
 - **skus**: el número de SKU es la clave permanente (siempre entero). **Admite descuento** = no: vale el precio de lista en todos los niveles.

@@ -16,7 +16,8 @@ Supabase (Postgres, São Paulo) · React + TypeScript + Vite + Tailwind v4 + sha
 - Un precio por (cliente, SKU, mes), para TODOS los clientes. Las correcciones quedan auditadas en `precios_cliente_cambios`.
 - Modalidad: GENERICO = lista_general − descuento del nivel, recalculado con `publicar_lista(mes)`; ESPECIAL = lista propia (no descuento), se maneja con % y a mano. `cotiza` false = bloqueado (reemplaza NO COTIZA).
 - Lista general: un precio LISTA por SKU/mes + `precio_minimo` (piso). Nivel = round(LISTA × (1 − desc), 1) salvo `skus.admite_descuento = false` (8 SKUs: ELITE, LUCAS, 2 Bitter, 4 Cerveza). Misma fórmula en SQL (`precio_con_descuento`) y en `src/lib/precios.ts`.
-- Esquema único en `supabase/migrations/0001_esquema.sql`; `supabase/reset.sql` borra todo para empezar de cero.
+- Esquema en `supabase/migrations/0001_esquema.sql` + `0002_precios_genericos_al_instante.sql` (se corren en orden; 0002 es repetible); `supabase/reset.sql` borra todo para empezar de cero.
+- Genérico: al crearlo, cambiarle nivel/modalidad/cotiza o tildarle un SKU, los disparadores guardan sus precios del mes actual (hora Argentina) con `lista_vigente` (función `recalcular_cliente`). Meses anteriores no se tocan.
 - Meses guardados como fecha día 1 (`2026-05-01` = MAY 2026).
 - Nombres de cliente completos (decidido por Javier, 2026-11-17). El código de cliente (`nro_cliente`) es la clave de negocio; el Excel no lo trae y se completa en la app.
 

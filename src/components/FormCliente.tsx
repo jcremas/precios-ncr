@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { DESCUENTOS, MODALIDADES, NIVELES, nombreModalidad, type Modalidad, type Nivel } from '@/lib/tipos'
-import type { DatosCliente } from '@/lib/clientes'
+import { soloDatos, type DatosCliente } from '@/lib/clientes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +19,7 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
   async function enviar(e: FormEvent) {
     e.preventDefault()
     const limpio = Object.fromEntries(
-      Object.entries(d).map(([k, v]) => [k, typeof v === 'string' ? v.trim() || null : v]),
+      Object.entries(soloDatos(d)).map(([k, v]) => [k, typeof v === 'string' ? v.trim() || null : v]),
     ) as DatosCliente
     if (!limpio.nombre) return setError('El nombre es obligatorio.')
     if (limpio.modalidad === 'GENERICO' && limpio.cotiza && !limpio.nivel)
@@ -49,7 +49,7 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
         </Select>
         <p className="text-xs text-muted-foreground">
           {d.modalidad === 'GENERICO'
-            ? 'Paga la lista general menos el descuento de su nivel. Se actualiza solo al publicar cada lista.'
+            ? 'Paga la lista general menos el descuento de su nivel. Sus precios se guardan al crearlo, al cambiarle el nivel y al publicar cada lista.'
             : 'Tiene su lista de precios propia. Se maneja desde Envío mensual.'}
         </p>
       </div>
