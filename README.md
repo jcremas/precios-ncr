@@ -33,20 +33,47 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
    ```
    Para sumar a otra persona más adelante: crear su usuario (paso 2) y agregar su email igual.
 
-### 4. Cargar los datos del Excel (una sola vez)
-En tu computadora, con Python instalado:
-```bash
-pip install openpyxl
-python3 migracion/importar_excel.py /ruta/a/PRECIOS_POR_CLIENTE.xlsm
-```
-El script muestra un resumen (clientes, SKUs, precios, avisos) y genera `migracion/salida/carga_inicial.sql`. Abrilo, copiá todo, pegalo en el **SQL Editor** de Supabase y apretá **Run**. Después podés borrar ese archivo.
+### 4. Bajar el proyecto a tu computadora (con GitHub Desktop)
+GitHub guarda el código "en la nube". Para correr el script de migración necesitás una copia en tu PC. GitHub Desktop la baja y la mantiene al día sin usar comandos.
 
-### 5. Probar la app en tu computadora (opcional)
+**Primera vez:**
+1. Descargá e instalá **GitHub Desktop** desde <https://desktop.github.com> y entrá con tu cuenta de GitHub.
+2. **File → Clone repository** → pestaña **GitHub.com** → elegí `jcremas/precios-ncr`.
+3. En **Local path** dejá la carpeta que propone (en Windows suele ser `Documentos\GitHub\precios-ncr`) → **Clone**.
+4. Listo: esa carpeta es tu copia del proyecto. Para abrirla: **Repository → Show in Explorer** (Windows) o **Show in Finder** (Mac).
+
+**Cada vez que yo (Claude) haga cambios:** abrí GitHub Desktop → **Fetch origin** y, si aparece, **Pull origin**. Tu carpeta queda igual que GitHub.
+
+**Dónde poner el Excel:** lo más seguro es **dejarlo fuera** de esa carpeta (por ejemplo en `Documentos`) y pasarle la ruta al script, como en el paso 5. Si igual lo copiás adentro, no pasa nada: el proyecto está configurado para ignorar cualquier `.xlsx` / `.xlsm` / `.xls`, así que GitHub Desktop no lo va a ofrecer para subir. Regla de oro: si alguna vez GitHub Desktop te muestra un Excel o un archivo `.env` en la lista de cambios, **no hagas Commit** y avisame.
+
+### 5. Cargar los datos del Excel (una sola vez)
+**a) Instalar Python (una sola vez)**
+- **Windows:** bajalo de <https://www.python.org/downloads/> (botón amarillo). Al instalar, **tildá "Add python.exe to PATH"** abajo de todo, y después *Install Now*.
+- **Mac:** bajalo de la misma página e instalalo con doble click.
+
+**b) Abrir una terminal dentro de la carpeta del proyecto**
+- En GitHub Desktop: **Repository → Open in Command Prompt** (Windows) o **Open in Terminal** (Mac). Se abre una ventana negra ya ubicada en la carpeta correcta.
+
+**c) Instalar lo que usa el script (una sola vez)** — escribí y Enter:
+```bash
+python -m pip install -r migracion/requirements.txt
+```
+(En Mac, si `python` no anda, usá `python3` en este y el siguiente comando.)
+
+**d) Correr la migración** — reemplazá la ruta por la de tu Excel. Truco: escribí `python migracion/importar_excel.py ` (con un espacio al final) y **arrastrá el archivo Excel a la ventana**: la ruta se escribe sola. Después Enter.
+```bash
+python migracion/importar_excel.py "C:\Users\TU_USUARIO\Documents\PRECIOS_POR_CLIENTE.xlsm"
+```
+El script muestra un resumen (51 clientes, 28 SKUs, 479 precios, algunos avisos) y crea el archivo `migracion/salida/carga_inicial.sql` (tampoco se sube a GitHub).
+
+**e) Pasar los datos a Supabase:** abrí `carga_inicial.sql` con el Bloc de notas, **Ctrl+A** y **Ctrl+C**, pegalo en el **SQL Editor** de Supabase y apretá **Run**. Corrélo **una sola vez**: si lo corrés dos veces da error de duplicados (no rompe nada, pero no hace falta). Después podés borrar el archivo.
+
+### 6. Probar la app en tu computadora (opcional)
 1. Instalá Node.js 22 o más nuevo.
 2. Copiá `.env.example` como `.env` y completalo con **Project Settings → API**: *Project URL* y la clave *anon public* (en paneles nuevos puede llamarse *Publishable key*).
 3. `npm install` y después `npm run dev`. Abrí <http://localhost:5173>.
 
-### 6. Publicar en Vercel
+### 7. Publicar en Vercel
 1. Entrá a <https://vercel.com> con tu cuenta de GitHub → **Add New → Project** → elegí el repo `precios-ncr`.
 2. En **Environment Variables** cargá `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (los mismos valores del `.env`).
 3. **Deploy**. Cada cambio que se suba a GitHub se publica solo.
