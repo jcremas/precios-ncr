@@ -222,7 +222,7 @@ export default function ClienteDetalle() {
           )}
           {cliente.modalidad === 'GENERICO' && (
             <p className="mt-4 text-sm text-muted-foreground">
-              Cliente genérico: sus precios son la lista general menos su descuento. Se guardan solos cada vez que publicás una lista en <Link className="text-primary hover:underline" to="/lista">Lista general</Link>.
+              Cliente genérico: sus precios son la lista general menos su descuento. Se guardan solos al crearlo, al cambiarle el nivel, al tildarle un SKU y cada vez que publicás una lista en <Link className="text-primary hover:underline" to="/lista">Lista general</Link>.
             </p>
           )}
         </CardContent>

@@ -2,7 +2,7 @@
 -- RESET: BORRA TODAS LAS TABLAS Y DATOS DE LA APP DE PRECIOS.
 -- No se puede deshacer. Usalo solo para empezar de cero.
 -- No toca los usuarios de login (Authentication > Users).
--- Después de esto, correr supabase/migrations/0001_esquema.sql.
+-- Después de esto, correr supabase/migrations/0001_esquema.sql y luego 0002.
 -- =====================================================================
 
 -- Vistas
@@ -28,6 +28,10 @@ drop table if exists public.niveles cascade;
 drop table if exists public.usuarios_autorizados cascade;
 
 -- Funciones
+drop function if exists public.recalcular_cliente_trg() cascade;
+drop function if exists public.recalcular_sku_cliente_trg() cascade;
+drop function if exists public.recalcular_cliente(bigint, bigint) cascade;
+drop function if exists public.mes_actual() cascade;
 drop function if exists public.cotizar(bigint) cascade;
 drop function if exists public.cotizar_cliente(bigint) cascade;
 drop function if exists public.aplicar_aumento(bigint, date, numeric) cascade;
