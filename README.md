@@ -9,7 +9,8 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 | Carpeta / archivo | Para qué sirve |
 |---|---|
 | `src/` | La app (pantallas: Envío mensual, Clientes, Ficha de cliente con historial, Cotizar, SKUs). |
-| `supabase/migrations/0001_esquema_inicial.sql` | Crea las tablas, la seguridad (login + RLS) y las vistas. Se corre una sola vez. |
+| `supabase/migrations/0001_esquema.sql` | Crea las tablas, la seguridad (login + RLS) y las vistas. Se corre una sola vez. |
+| `supabase/reset.sql` | Borra todo lo de la app para empezar de cero. |
 | `migracion/importar_excel.py` | Lee el Excel y genera el SQL con los datos iniciales. El Excel y el SQL generado **nunca** se suben. |
 | `.env.example` | Modelo del archivo de claves. El `.env` real no se sube. |
 
@@ -21,8 +22,8 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 3. Esperá un par de minutos a que termine de crearse.
 
 ### 2. Crear las tablas
-1. En Supabase: menú **SQL Editor** → **New query**.
-2. Abrí `supabase/migrations/0001_esquema_inicial.sql`, copiá todo, pegalo y apretá **Run**. Tiene que decir *Success*.
+1. **Solo si ya habías creado tablas antes y querés empezar de cero:** en Supabase, menú **SQL Editor** → **New query**, pegá todo `supabase/reset.sql` y apretá **Run**. ⚠️ Borra todas las tablas y precios de la app (no se puede deshacer). Los usuarios de login no se tocan. Al final tiene que mostrar una tabla vacía (0 filas).
+2. **New query** otra vez: abrí `supabase/migrations/0001_esquema.sql`, copiá todo, pegalo y apretá **Run**. Tiene que decir *Success*.
 
 ### 3. Cerrar el registro público y crear tu usuario
 1. **Authentication → Sign In / Providers → Email**: dejá Email activado y **desactivá "Allow new users to sign up"**. Así nadie se puede registrar solo.
@@ -64,7 +65,7 @@ python -m pip install -r migracion/requirements.txt
 ```bash
 python migracion/importar_excel.py "C:\Users\TU_USUARIO\Documents\PRECIOS_POR_CLIENTE.xlsm"
 ```
-El script muestra un resumen (51 clientes, 28 SKUs, 479 precios, algunos avisos) y crea el archivo `migracion/salida/carga_inicial.sql` (tampoco se sube a GitHub).
+El script muestra un resumen (51 clientes especiales, 28 SKUs, lista general de 26 SKUs, 479 precios, 2 avisos de SKUs sin precio) y crea el archivo `migracion/salida/carga_inicial.sql` (tampoco se sube a GitHub).
 
 **e) Pasar los datos a Supabase:** abrí `carga_inicial.sql` con el Bloc de notas, **Ctrl+A** y **Ctrl+C**, pegalo en el **SQL Editor** de Supabase y apretá **Run**. Corrélo **una sola vez**: si lo corrés dos veces da error de duplicados (no rompe nada, pero no hace falta). Después podés borrar el archivo.
 
