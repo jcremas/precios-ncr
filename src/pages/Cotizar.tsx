@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { nombreMes, precio } from '@/lib/formato'
-import { nombreModalidad, type Cliente } from '@/lib/tipos'
+import { MODALIDADES, nombreModalidad, type Cliente, type Modalidad } from '@/lib/tipos'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -15,6 +16,8 @@ interface Linea { sku: number; descripcion: string; precio: number; mes: string;
 export default function Cotizar() {
   const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel' | 'nro_cliente' | 'modalidad' | 'cotiza'>[]>([])
   const [id, setId] = useState('')
+  const [modalidad, setModalidad] = useState<Modalidad | ''>('')
+  const [buscar, setBuscar] = useState('')
   const [lineas, setLineas] = useState<Linea[]>([])
   const [aviso, setAviso] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
@@ -25,6 +28,10 @@ export default function Cotizar() {
   }, [])
 
   const cliente = clientes.find((c) => String(c.id) === id)
+  const texto = buscar.trim().toUpperCase()
+  const visibles = clientes.filter((c) =>
+    (!modalidad || c.modalidad === modalidad) &&
+    (!texto || c.nombre.toUpperCase().includes(texto) || (c.nro_cliente ?? '').toUpperCase().includes(texto)))
 
   useEffect(() => {
     setLineas([])
@@ -32,12 +39,33 @@ export default function Cotizar() {
     setCopiado(false)
     if (!cliente) return
     if (!cliente.cotiza) return setAviso('Este cliente está marcado como NO COTIZA.')
-    supabase.rpc('cotizar', { p_cliente_id: cliente.id }).then(({ data, error }) => {
-      if (error) return setAviso(mensajeError(error))
-      setLineas((data ?? []) as Linea[])
-      if (!data?.length) setAviso(cliente.modalidad === 'ESPECIAL' ? 'Este cliente todavía no tiene precios cargados.' : 'No hay lista general cargada o el cliente no tiene SKUs tildados.')
+    cotizar(cliente).then(({ lineas, error }) => {
+      if (error) return setAviso(error)
+      setLineas(lineas)
+      if (!lineas.length) setAviso(cliente.modalidad === 'ESPECIAL' ? 'Este cliente todavía no tiene precios cargados.' : 'No hay lista general cargada o el cliente no tiene SKUs tildados.')
     })
   }, [cliente])
+
+  /** Genérico: lista vigente menos su descuento; si no hay lista vigente,
+   *  sus últimos precios guardados. Especial: sus últimos precios. */
+  async function cotizar(c: NonNullable<typeof cliente>): Promise<{ lineas: Linea[]; error?: string }> {
+    const { data, error } = await supabase.rpc('cotizar', { p_cliente_id: c.id })
+    if (error) return { lineas: [], error: mensajeError(error) }
+    if (data?.length || c.modalidad === 'ESPECIAL') return { lineas: (data ?? []) as Linea[] }
+    const [u, g, s] = await Promise.all([
+      supabase.from('v_ultimo_precio_cliente').select('sku, mes, precio').eq('cliente_id', c.id),
+      supabase.from('cliente_skus').select('sku').eq('cliente_id', c.id).eq('activo', true),
+      supabase.from('skus').select('sku, descripcion'),
+    ])
+    const tildados = new Set((g.data ?? []).map((x) => x.sku))
+    const desc = new Map((s.data ?? []).map((x) => [x.sku, x.descripcion as string]))
+    return {
+      lineas: (u.data ?? [])
+        .filter((x) => tildados.has(x.sku))
+        .map((x) => ({ sku: x.sku, descripcion: desc.get(x.sku) ?? '', precio: Number(x.precio), mes: x.mes, origen: 'último precio guardado' }))
+        .sort((a, b) => a.descripcion.localeCompare(b.descripcion) || a.sku - b.sku),
+    }
+  }
 
   async function copiar() {
     const texto = [
@@ -56,12 +84,25 @@ export default function Cotizar() {
           <CardTitle>Cotizar a un cliente</CardTitle>
           <CardDescription>Genérico: lista general vigente menos el descuento de su nivel. Especial: su último precio cargado. No cotiza: bloqueado. Solo SKUs tildados.</CardDescription>
         </CardHeader>
-        <CardContent className="grid max-w-xl gap-2">
+        <CardContent className="grid max-w-3xl gap-4 md:grid-cols-[180px_1fr]">
+          <div className="grid gap-2">
+            <Label htmlFor="mod">Tipo de cliente</Label>
+            <Select id="mod" value={modalidad} onChange={(e) => setModalidad(e.target.value as Modalidad | '')}>
+              <option value="">Todos ({clientes.length})</option>
+              {MODALIDADES.map((m) => <option key={m} value={m}>{m === 'GENERICO' ? 'Genéricos' : 'Especiales'} ({clientes.filter((c) => c.modalidad === m).length})</option>)}
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="buscar">Buscar por nombre o código</Label>
+            <Input id="buscar" value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Ej.: SIETE" />
+          </div>
+          <div className="grid gap-2 md:col-span-2">
           <Label htmlFor="cli">Cliente</Label>
           <Select id="cli" value={id} onChange={(e) => setId(e.target.value)}>
-            <option value="">Elegí un cliente</option>
-            {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {nombreModalidad(c.modalidad)}{c.nivel ? ` ${c.nivel}` : ''}{c.cotiza ? '' : ' · NO COTIZA'}</option>)}
+            <option value="">Elegí un cliente ({visibles.length})</option>
+            {visibles.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {nombreModalidad(c.modalidad)}{c.nivel ? ` ${c.nivel}` : ''}{c.cotiza ? '' : ' · NO COTIZA'}</option>)}
           </Select>
+          </div>
         </CardContent>
       </Card>
 
