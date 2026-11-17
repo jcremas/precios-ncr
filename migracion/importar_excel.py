@@ -6,6 +6,8 @@ SQL (migracion/salida/carga_inicial.sql) que después se pega en el SQL Editor
 de Supabase. Tanto el Excel como el SQL generado quedan FUERA de git porque
 contienen precios reales.
 
+Requiere haber corrido supabase/migrations 0001 y 0002.
+
 Uso:
     python3 migracion/importar_excel.py RUTA/AL/ARCHIVO.xlsm
 
@@ -14,7 +16,9 @@ Opciones:
                      Se puede repetir. Sin esto, un mes sin año frena la migración.
 
 Qué importa:
-    * LISTA_REFERENCIA  -> skus + lista_precios (mes tomado del título)
+    * LISTA_REFERENCIA  -> skus + lista_general (precio LISTA; mes del título).
+                           SKUs con igual precio en todos los niveles -> sin descuento.
+                           La columna "Minimo" NO se importa (no es un precio piso).
     * SKU_MAESTRO       -> skus (si la hoja existe; pisa descripción/familia/estado)
     * BASE_CLIENTES     -> clientes (si la hoja existe)
     * INDICE + una hoja por cliente ESPECIAL -> clientes ESPECIAL, su grilla de
@@ -124,7 +128,8 @@ def main() -> int:
     precios: list[tuple] = []            # (nombre_cliente, sku, mes, precio)
     grillas: dict[str, set[int]] = {}
 
-    # ---- LISTA_REFERENCIA ----
+    # ---- LISTA_REFERENCIA -> lista general (precio LISTA) ----
+    # Un SKU con el mismo precio en todos los niveles se marca "sin descuento".
     if "LISTA_REFERENCIA" in wb.sheetnames:
         rows = list(filas(wb["LISTA_REFERENCIA"]))
         mes_lista = parse_mes(rows[0][0].split("-")[-1], anios)
@@ -133,13 +138,20 @@ def main() -> int:
             sku = a_sku(r[0])
             if sku is None:
                 continue
-            skus.setdefault(sku, {"descripcion": limpiar(r[1]), "familia": None, "estado": "ACTIVO"})
-            for nivel in NIVELES_LISTA:
-                p = a_precio(r[cab.index(nivel)])
-                if p is None:
-                    avisos.append(f"Lista {mes_lista:%m/%Y}: SKU {sku} sin precio en {nivel} (se omite)")
-                else:
-                    lista.append((mes_lista, sku, nivel, p))
+            s = skus.setdefault(sku, {"descripcion": limpiar(r[1]), "familia": None, "estado": "ACTIVO", "admite_descuento": True})
+            precios_nivel = [a_precio(r[cab.index(n)]) for n in NIVELES_LISTA]
+            p_lista = precios_nivel[0]
+            if p_lista is None:
+                avisos.append(f"Lista {mes_lista:%m/%Y}: SKU {sku} sin precio (se omite de la lista)")
+                continue
+            if all(p == p_lista for p in precios_nivel):
+                s["admite_descuento"] = False
+            else:
+                for nivel, desc, p in zip(NIVELES_LISTA, [0, 3, 6, 10, 15], precios_nivel):
+                    esperado = round(p_lista * (1 - desc / 100) + 1e-9, 1)
+                    if p is None or abs(p - esperado) > 0.051:
+                        avisos.append(f"Lista {mes_lista:%m/%Y}: SKU {sku} nivel {nivel} = {p}, se esperaba {esperado}")
+            lista.append((mes_lista, sku, p_lista))
 
     # ---- SKU_MAESTRO (opcional) ----
     if "SKU_MAESTRO" in wb.sheetnames:
@@ -152,6 +164,7 @@ def main() -> int:
                 continue
             d = dict(zip(cab, r))
             skus[sku] = {
+                "admite_descuento": skus.get(sku, {}).get("admite_descuento", True),
                 "descripcion": limpiar(d.get("DESCRIPCION") or d.get("DESCRIPCIÓN")) or skus.get(sku, {}).get("descripcion"),
                 "familia": limpiar(d.get("FAMILIA")),
                 "estado": (limpiar(d.get("ESTADO")) or "ACTIVO").upper(),
@@ -221,7 +234,7 @@ def main() -> int:
             if sku is None:
                 continue
             if sku not in skus:
-                skus[sku] = {"descripcion": limpiar(r[1]), "familia": None, "estado": "ACTIVO"}
+                skus[sku] = {"descripcion": limpiar(r[1]), "familia": None, "estado": "ACTIVO", "admite_descuento": True}
                 avisos.append(f"SKU {sku} aparece en '{hoja}' pero no en la lista: se crea")
             for j, mes in meses.items():
                 v = r[j] if j < len(r) else None
@@ -238,14 +251,21 @@ def main() -> int:
     L = ["-- Generado por migracion/importar_excel.py. CONTIENE PRECIOS REALES: no subir a git.",
          "begin;"]
     for sku, s in sorted(skus.items()):
-        L.append("insert into skus (sku, descripcion, familia, estado) values "
-                 f"({sku}, {q(s['descripcion'] or f'SKU {sku}')}, {q(s['familia'])}, {q(s['estado'])});")
+        L.append("insert into skus (sku, descripcion, familia, estado, admite_descuento) values "
+                 f"({sku}, {q(s['descripcion'] or f'SKU {sku}')}, {q(s['familia'])}, {q(s['estado'])}, "
+                 f"{'true' if s.get('admite_descuento', True) else 'false'});")
     for c in clientes.values():
+        nivel = (c.get("nivel") or "LISTA").upper()
+        modalidad = "ESPECIAL" if nivel == "ESPECIAL" else "GENERICO"
+        cotiza = nivel != "NO COTIZA"
+        nivel = nivel if nivel in NIVELES_LISTA else None
         L.append("insert into clientes (nombre, nombre_hoja_excel, nro_cliente, segmento, contacto, email, "
-                 "condicion_pago, nivel, observaciones) values ("
+                 "condicion_pago, modalidad, nivel, cotiza, observaciones) values ("
                  + ", ".join(q(c.get(k)) for k in ["nombre", "hoja", "nro_cliente", "segmento", "contacto",
-                                                   "email", "condicion_pago", "nivel", "observaciones"]) + ");")
-    # La base arma la grilla ESPECIAL con todos los SKUs: se deja solo lo que el cliente compra.
+                                                   "email", "condicion_pago"])
+                 + f", {q(modalidad)}, {q(nivel)}, {'true' if cotiza else 'false'}, {q(c.get('observaciones'))});")
+    # La base tilda todos los SKUs activos al crear un cliente: para los que
+    # tienen hoja propia se deja tildado solo lo que compran.
     for clave, g in grillas.items():
         nombre = clientes[clave]["nombre"]
         sel = f"(select id from clientes where upper(nombre) = upper({q(nombre)}))"
@@ -253,12 +273,12 @@ def main() -> int:
                  + (f" and sku not in ({', '.join(map(str, sorted(g)))});" if g else ";"))
         for sku in sorted(g):
             L.append(f"insert into cliente_skus (cliente_id, sku) values ({sel}, {sku}) on conflict do nothing;")
-    for mes, sku, nivel, p in lista:
-        L.append(f"insert into lista_precios (mes, sku, nivel, precio) values ({q(mes)}, {sku}, {q(nivel)}, {p});")
+    for mes, sku, p in lista:
+        L.append(f"insert into lista_general (mes, sku, precio) values ({q(mes)}, {sku}, {p});")
     for clave, sku, mes, p in precios:
         nombre = clientes[clave]["nombre"]
-        L.append("insert into precios_cliente (cliente_id, sku, mes, precio) values "
-                 f"((select id from clientes where upper(nombre) = upper({q(nombre)})), {sku}, {q(mes)}, {p});")
+        L.append("insert into precios_cliente (cliente_id, sku, mes, precio, origen) values "
+                 f"((select id from clientes where upper(nombre) = upper({q(nombre)})), {sku}, {q(mes)}, {p}, 'MIGRACION');")
     L.append("commit;")
     out.write_text("\n".join(L) + "\n", encoding="utf-8")
 
@@ -268,7 +288,8 @@ def main() -> int:
         niveles[c.get("nivel")] = niveles.get(c.get("nivel"), 0) + 1
     print(f"SKUs: {len(skus)}")
     print(f"Clientes: {len(clientes)}  por nivel: {niveles}")
-    print(f"Precios de lista: {len(lista)}")
+    print(f"Lista general: {len(lista)} SKUs con precio; sin descuento: "
+          f"{sorted(k for k, v in skus.items() if not v.get('admite_descuento', True))}")
     print(f"Precios de clientes: {len(precios)} en meses {sorted({m.strftime('%m/%Y') for _, _, m, _ in precios})}")
     print(f"Avisos: {len(avisos)}")
     for a in avisos:

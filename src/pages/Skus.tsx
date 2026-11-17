@@ -15,12 +15,12 @@ const ESTADOS: EstadoSku[] = ['ACTIVO', 'INACTIVO', 'DESCONTINUADO']
 function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
   const [d, setD] = useState(s)
   const [error, setError] = useState<string | null>(null)
-  const cambio = d.descripcion !== s.descripcion || d.familia !== s.familia || d.estado !== s.estado
+  const cambio = d.descripcion !== s.descripcion || d.familia !== s.familia || d.estado !== s.estado || d.admite_descuento !== s.admite_descuento
 
   async function guardar() {
     if (!d.descripcion.trim()) return setError('Falta descripción')
     const { error } = await supabase.from('skus')
-      .update({ descripcion: d.descripcion.trim(), familia: d.familia?.trim() || null, estado: d.estado })
+      .update({ descripcion: d.descripcion.trim(), familia: d.familia?.trim() || null, estado: d.estado, admite_descuento: d.admite_descuento })
       .eq('sku', s.sku)
     if (error) return setError(mensajeError(error))
     setError(null)
@@ -37,6 +37,9 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
           {ESTADOS.map((x) => <option key={x}>{x}</option>)}
         </Select>
       </TableCell>
+      <TableCell className="text-center">
+        <input type="checkbox" aria-label={`SKU ${s.sku} admite descuento`} checked={d.admite_descuento} onChange={(e) => setD({ ...d, admite_descuento: e.target.checked })} />
+      </TableCell>
       <TableCell>
         {cambio && <Button size="sm" onClick={guardar}>Guardar</Button>}
         {error && <span className="ml-2 text-xs text-destructive">{error}</span>}
@@ -47,7 +50,7 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
 
 export default function Skus() {
   const [skus, setSkus] = useState<Sku[]>([])
-  const [nuevo, setNuevo] = useState({ sku: '', descripcion: '', familia: '' })
+  const [nuevo, setNuevo] = useState({ sku: '', descripcion: '', familia: '', admite_descuento: true })
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,11 +68,11 @@ export default function Skus() {
     const sku = nuevo.sku.trim()
     if (!/^\d+$/.test(sku)) return setError('El SKU tiene que ser un número entero, sin letras ni puntos.')
     const { error } = await supabase.from('skus').insert({
-      sku: Number(sku), descripcion: nuevo.descripcion.trim(), familia: nuevo.familia.trim() || null,
+      sku: Number(sku), descripcion: nuevo.descripcion.trim(), familia: nuevo.familia.trim() || null, admite_descuento: nuevo.admite_descuento,
     })
     if (error) return setError(mensajeError(error).includes('skus_pkey') ? 'Ese SKU ya existe.' : mensajeError(error))
     setError(null)
-    setNuevo({ sku: '', descripcion: '', familia: '' })
+    setNuevo({ sku: '', descripcion: '', familia: '', admite_descuento: true })
     setAbierto(false)
     cargar()
   }
@@ -89,9 +92,10 @@ export default function Skus() {
               <div className="grid gap-2"><Label htmlFor="sku">SKU (número)</Label><Input id="sku" inputMode="numeric" required value={nuevo.sku} onChange={(e) => setNuevo({ ...nuevo, sku: e.target.value })} /></div>
               <div className="grid gap-2"><Label htmlFor="desc">Descripción</Label><Input id="desc" required value={nuevo.descripcion} onChange={(e) => setNuevo({ ...nuevo, descripcion: e.target.value })} /></div>
               <div className="grid gap-2"><Label htmlFor="fam">Familia</Label><Input id="fam" value={nuevo.familia} onChange={(e) => setNuevo({ ...nuevo, familia: e.target.value })} /></div>
+              <label className="flex items-center gap-2 text-sm md:col-span-4"><input type="checkbox" checked={nuevo.admite_descuento} onChange={(e) => setNuevo({ ...nuevo, admite_descuento: e.target.checked })} /> Admite descuento (destildalo si vale lo mismo para todos los niveles)</label>
               <div className="flex gap-2"><Button type="submit">Crear</Button><Button type="button" variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button></div>
             </form>
-            <p className="mt-3 text-xs text-muted-foreground">El SKU nuevo queda disponible para todos los clientes. Para que aparezca en el envío mensual de un cliente especial, agregalo desde su ficha.</p>
+            <p className="mt-3 text-xs text-muted-foreground">El SKU nuevo queda tildado en todos los clientes genéricos. A los especiales se lo agregás desde su ficha. Su precio se carga en Lista general.</p>
           </CardContent>
         </Card>
       )}
@@ -105,11 +109,12 @@ export default function Skus() {
             <TableHead>Descripción</TableHead>
             <TableHead>Familia</TableHead>
             <TableHead>Estado</TableHead>
+            <TableHead className="text-center">Admite descuento</TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}`} s={s} onGuardado={cargar} />)}
+          {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}-${s.admite_descuento}`} s={s} onGuardado={cargar} />)}
         </TableBody>
       </Table>
     </div>

@@ -9,7 +9,8 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 | Carpeta / archivo | Para qué sirve |
 |---|---|
 | `src/` | La app (pantallas: Envío mensual, Clientes, Ficha de cliente con historial, Cotizar, SKUs). |
-| `supabase/migrations/0001_esquema_inicial.sql` | Crea las tablas, la seguridad (login + RLS) y las vistas. Se corre una sola vez. |
+| `supabase/migrations/0001_esquema.sql` | Crea las tablas, la seguridad (login + RLS) y las vistas. Se corre una sola vez. |
+| `supabase/reset.sql` | Borra todo lo de la app para empezar de cero. |
 | `migracion/importar_excel.py` | Lee el Excel y genera el SQL con los datos iniciales. El Excel y el SQL generado **nunca** se suben. |
 | `.env.example` | Modelo del archivo de claves. El `.env` real no se sube. |
 
@@ -21,8 +22,8 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 3. Esperá un par de minutos a que termine de crearse.
 
 ### 2. Crear las tablas
-1. En Supabase: menú **SQL Editor** → **New query**.
-2. Abrí `supabase/migrations/0001_esquema_inicial.sql`, copiá todo, pegalo y apretá **Run**. Tiene que decir *Success*.
+1. **Solo si ya habías creado tablas antes y querés empezar de cero:** en Supabase, menú **SQL Editor** → **New query**, pegá todo `supabase/reset.sql` y apretá **Run**. ⚠️ Borra todas las tablas y precios de la app (no se puede deshacer). Los usuarios de login no se tocan. Al final tiene que mostrar una tabla vacía (0 filas).
+2. **New query** otra vez: abrí `supabase/migrations/0001_esquema.sql`, copiá todo, pegalo y apretá **Run**. Tiene que decir *Success*.
 
 ### 3. Cerrar el registro público y crear tu usuario
 1. **Authentication → Sign In / Providers → Email**: dejá Email activado y **desactivá "Allow new users to sign up"**. Así nadie se puede registrar solo.
@@ -64,7 +65,7 @@ python -m pip install -r migracion/requirements.txt
 ```bash
 python migracion/importar_excel.py "C:\Users\TU_USUARIO\Documents\PRECIOS_POR_CLIENTE.xlsm"
 ```
-El script muestra un resumen (51 clientes, 28 SKUs, 479 precios, algunos avisos) y crea el archivo `migracion/salida/carga_inicial.sql` (tampoco se sube a GitHub).
+El script muestra un resumen (51 clientes especiales, 28 SKUs, lista general de 26 SKUs, 479 precios, 2 avisos de SKUs sin precio) y crea el archivo `migracion/salida/carga_inicial.sql` (tampoco se sube a GitHub).
 
 **e) Pasar los datos a Supabase:** abrí `carga_inicial.sql` con el Bloc de notas, **Ctrl+A** y **Ctrl+C**, pegalo en el **SQL Editor** de Supabase y apretá **Run**. Corrélo **una sola vez**: si lo corrés dos veces da error de duplicados (no rompe nada, pero no hace falta). Después podés borrar el archivo.
 
@@ -84,11 +85,23 @@ El script muestra un resumen (51 clientes, 28 SKUs, 479 precios, algunos avisos)
 
 ## Cómo funciona la base
 
-- **niveles**: LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%, ESPECIAL, NO COTIZA.
-- **skus**: el número de SKU es la clave permanente (siempre entero). La descripción se edita en un solo lugar.
-- **clientes**: nombre completo (sin el límite de 31 caracteres del Excel) y código de cliente único.
-- **cliente_skus**: qué SKUs compra cada cliente (su grilla para el envío mensual).
-- **lista_precios**: precio de cada SKU por nivel y mes de vigencia. Se guarda el precio de cada nivel tal cual, porque en algunos SKUs no se aplica el descuento.
-- **precios_cliente**: un precio por cliente, SKU y mes. Si se corrige un precio ya guardado, el valor anterior queda en **precios_cliente_cambios** (no se pierde nada).
+- **clientes**: nombre completo, código de cliente único y **modalidad**:
+  - **Genérico**: paga la lista general menos el descuento de su nivel (LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%). Sus precios se guardan solos al **publicar** cada lista general.
+  - **Especial**: tiene su lista propia. La primera se arma con la lista general menos un descuento elegido; después se maneja con % y a mano en Envío mensual.
+  - **Cotiza** sí/no: un cliente que no cotiza queda bloqueado sin borrarlo.
+- **skus**: el número de SKU es la clave permanente (siempre entero). **Admite descuento** = no: vale el precio de lista en todos los niveles.
+- **lista_general**: un precio de LISTA por SKU y mes, más el **precio mínimo** (piso) de referencia. Los niveles se calculan: LISTA × (1 − descuento), redondeado a 1 decimal.
+- **cliente_skus**: mapa SKU × cliente, qué SKUs se le cotizan a cada uno. Un cliente nuevo arranca con todos los SKUs activos tildados; un SKU nuevo se tilda en todos los genéricos.
+- **precios_cliente**: un precio por cliente, SKU y mes, para todos los clientes, con su **origen** (lista, aumento %, manual, migración). Si se corrige un precio ya guardado, el valor anterior queda en **precios_cliente_cambios**.
 - **precios_competencia**: precios de la competencia por cliente, SKU y mes (pantalla pendiente).
-- Vistas: historial con variación mensual y acumulada, último precio, índice de clientes, resumen mínimo/máximo/promedio por SKU y mes.
+
+## Pantallas
+
+| Pantalla | Para qué |
+|---|---|
+| Envío mensual | Precios del mes de los clientes especiales: % de aumento, edición a mano, lista y mínimo de referencia (en rojo si quedás debajo del piso). |
+| Lista general | Cargar la lista del mes (a mano, con % sobre la anterior o pegando desde Excel), el mínimo, y publicarla a los genéricos. |
+| Clientes | Índice, alta y edición. En la ficha: historial, mapa de SKUs y, para un especial nuevo, armar su primera lista. |
+| Consultas | Por SKU (mín., máx., promedio, mediana y detalle ordenable), ranking de clientes, brecha contra la lista, ficha, envíos del mes, desactualizados y cobertura. Todo se exporta a Excel. |
+| Cotizar | Precios vigentes de un cliente para copiar y enviar. |
+| SKUs | Alta y edición, estado y si admite descuento. |
