@@ -30,5 +30,7 @@ dist-ssr
 *.xlsx
 *.xlsm
 *.xls
+*.XLS*
+*.CSV
 *.csv
 migracion/salida/
