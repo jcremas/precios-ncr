@@ -18,7 +18,7 @@ Supabase → **Edge Functions** → **Secrets** → Add new secret:
 - Name: `GEMINI_API_KEY`
 - Value: la clave del paso 2 → **Save**.
 
-(Opcional) `GEMINI_MODEL` para elegir otro modelo. Si no se carga, usa `gemini-flash-latest`.
+(Opcional) `GEMINI_MODEL` para elegir otro modelo. Si no se carga, usa `gemini-flash-lite-latest` (el más rápido). Si cargaste `GEMINI_MODEL` antes, borralo para usar el rápido.
 
 ## 4. Crear la función
 Supabase → **Edge Functions** → **Deploy a new function** → **Via Editor**:

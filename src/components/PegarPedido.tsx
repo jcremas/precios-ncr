@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { copiarTabla } from '@/lib/copiar'
 import { nombreMes, precio } from '@/lib/formato'
+import { leerPedidoPorReglas, normalizar, type FilaLeida } from '@/lib/leerPedido'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,7 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 /** Precio del cliente para cada SKU en el mes elegido (lo que muestra Cotizar). */
 export interface PrecioCotizado { sku: number; descripcion: string; precio: number }
 
-interface SkuCat { sku: number; descripcion: string; unidades_pallet: number | null; estado: string }
+interface SkuCat { sku: number; descripcion: string; color: string | null; sinonimos?: string | null; unidades_pallet: number | null; estado: string }
+
 
 interface Fila {
   texto: string
@@ -26,6 +28,7 @@ interface Fila {
 }
 
 const fmtUnidades = new Intl.NumberFormat('es-AR')
+const fmtMs = (ms: number) => (ms < 1000 ? `${Math.max(1, Math.round(ms))} ms` : `${(ms / 1000).toFixed(1).replace('.', ',')} s`)
 const fmtPallets = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 
 /** Traduce el error de la función a un mensaje claro, con el motivo real. */
@@ -65,25 +68,62 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
   const [leyendo, setLeyendo] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
+  const [resumen, setResumen] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.from('skus').select('sku, descripcion, unidades_pallet, estado').order('descripcion')
-      .then(({ data }) => setCatalogo((data ?? []) as SkuCat[]))
+    supabase.from('skus').select('sku, descripcion, color, sinonimos, unidades_pallet, estado').order('descripcion')
+      .then(async ({ data, error }) => {
+        // Si la base todavía no tiene "Otros nombres" (0009), se lee sin ellos.
+        if (!error) return setCatalogo((data ?? []) as SkuCat[])
+        const sin = await supabase.from('skus').select('sku, descripcion, color, unidades_pallet, estado').order('descripcion')
+        setCatalogo((sin.data ?? []) as SkuCat[])
+      })
   }, [])
 
   const porSku = new Map(catalogo.map((s) => [s.sku, s]))
   const precioDe = new Map(precios.map((p) => [p.sku, Number(p.precio)]))
 
+  const aFilas = (lista: FilaLeida[]): Fila[] =>
+    lista.map((f) => ({ ...f, pallets: f.pallets != null ? String(f.pallets).replace('.', ',') : '' }))
+
+  /** 1) Lee todo por reglas, al instante. 2) Solo las líneas sin reconocer van a la IA. */
   async function leer() {
-    setLeyendo(true)
     setError(null)
     setCopiado(false)
-    const { data, error } = await supabase.functions.invoke('leer-pedido', { body: { texto } })
+    setResumen(null)
+    const t0 = performance.now()
+    const reglas = leerPedidoPorReglas(texto, catalogo)
+    const msReglas = performance.now() - t0
+    setFilas(aFilas(reglas))
+    const dudosas = reglas.filter((f) => f.sku == null)
+    if (!reglas.length) return setError('No se encontraron productos en el texto.')
+    if (!dudosas.length) return setResumen(`Leído al instante (${fmtMs(msReglas)}), sin usar IA.`)
+
+    setLeyendo(true)
+    const t1 = performance.now()
+    const { data, error } = await supabase.functions.invoke('leer-pedido', { body: { texto: dudosas.map((f) => f.texto).join('\n') } })
+    const msIa = performance.now() - t1
     setLeyendo(false)
-    if (error) return setError(await explicarError(error))
-    const recibidas = ((data?.filas ?? []) as (Omit<Fila, 'pallets'> & { pallets: number | null })[])
-    if (!recibidas.length) return setError('La IA no encontró productos en el texto.')
-    setFilas(recibidas.map((f) => ({ ...f, pallets: f.pallets != null ? String(f.pallets).replace('.', ',') : '' })))
+    if (error) {
+      setResumen(`${reglas.length - dudosas.length} línea(s) leídas al instante. ${dudosas.length} sin reconocer: elegí el SKU a mano.`)
+      return setError(`No se pudo consultar a la IA: ${await explicarError(error)}`)
+    }
+    const deIa = (data?.filas ?? []) as FilaLeida[]
+    const clave = (t: string) => normalizar(t)
+    const usadas = new Set<number>()
+    const final = reglas.map((f) => {
+      if (f.sku != null) return f
+      const k = clave(f.texto)
+      const j = deIa.findIndex((x, n) => !usadas.has(n) && (clave(x.texto) === k || k.includes(clave(x.texto)) || clave(x.texto).includes(k)))
+      if (j < 0 || deIa[j].sku == null) return f
+      usadas.add(j)
+      const x = deIa[j]
+      return { ...f, sku: x.sku, pallets: f.pallets ?? x.pallets, botellas: f.botellas ?? x.botellas,
+        confianza: x.confianza, nota: `Lo reconoció la IA${x.nota ? `: ${x.nota}` : ''}. Revisalo.` } as FilaLeida
+    })
+    setFilas(aFilas(final))
+    const resueltas = final.filter((f, n) => reglas[n].sku == null && f.sku != null).length
+    setResumen(`${reglas.length - dudosas.length} línea(s) leídas al instante. ${dudosas.length} consultadas a la IA (${fmtMs(msIa)}${data?.modelo ? `, ${data.modelo}` : ''}): reconoció ${resueltas}.`)
   }
 
   const cambiar = (i: number, cambio: Partial<Fila>) => {
@@ -103,7 +143,7 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
     if (pallets == null) dudas.push('Falta la cantidad de pallets')
     if (f.botellas != null && unidades != null && f.botellas !== unidades)
       dudas.push(`El pedido dice ${fmtUnidades.format(f.botellas)} botellas y ${f.pallets} pallet(s) son ${fmtUnidades.format(unidades)}`)
-    if (f.sku != null && f.confianza !== 'alta') dudas.push(`La IA no está segura (${f.confianza})`)
+    if (f.sku != null && f.confianza !== 'alta') dudas.push(`No es seguro (${f.confianza}): revisalo`)
     if (f.nota) dudas.push(f.nota)
     return { s, p, pallets, unidades, dudas }
   })
@@ -128,8 +168,8 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Sparkles className="size-4" /> Pegar pedido</CardTitle>
         <CardDescription>
-          Pegá el pedido como te llegó (correo, WhatsApp). La IA (Google Gemini, plan gratis) reconoce cada producto y la cantidad de pallets; el precio sale de la lista de este cliente en {nombreMes(mes)}.
-          A la IA solo le llega el texto que pegues y la lista de SKUs, sin precios: borrá del texto datos que no quieras mandar. Revisá las filas marcadas en amarillo.
+          Pegá el pedido como te llegó (correo, WhatsApp). La app lo lee al instante comparando con la descripción y los "Otros nombres" de cada SKU (pantalla SKUs); el precio sale de la lista de este cliente en {nombreMes(mes)}.
+          Solo las líneas que no reconoce se le consultan a Google Gemini (plan gratis, uno o dos segundos); a la IA le llega solo ese texto y la lista de SKUs, sin precios. Cuantos más "Otros nombres" cargues, menos se usa la IA. Revisá las filas en amarillo.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -139,8 +179,10 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
             onChange={(e) => setTexto(e.target.value)}
             placeholder={'3 pallets botella Burdeos Cónica Baja 750 – Verde – Boca corcho /// 3.402 botellas\n4 pallets botella Burdeos Giuliana 750 – Verde – Boca Corcho /// 4.872 botellas'} />
           <div className="flex items-center gap-2">
-            <Button onClick={leer} disabled={!texto.trim() || leyendo}>{leyendo ? 'Leyendo… (puede tardar unos segundos)' : 'Leer pedido con IA'}</Button>
-            {filas.length > 0 && <Button variant="ghost" onClick={() => { setFilas([]); setCopiado(false) }}>Limpiar resultado</Button>}
+            <Button onClick={leer} disabled={!texto.trim() || leyendo || !catalogo.length}>Leer pedido</Button>
+            {leyendo && <span className="text-sm text-muted-foreground">Consultando a la IA las líneas que no se reconocieron…</span>}
+            {!leyendo && resumen && <span className="text-sm text-muted-foreground">{resumen}</span>}
+            {filas.length > 0 && <Button variant="ghost" onClick={() => { setFilas([]); setResumen(null); setCopiado(false) }}>Limpiar resultado</Button>}
           </div>
         </div>
 
@@ -206,3 +248,4 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
     </Card>
   )
 }
+

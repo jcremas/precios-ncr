@@ -24,7 +24,8 @@ const CORS = {
 const MAX_TEXTO = 8000
 
 /** Modelos gratuitos a probar si el elegido está saturado o sin cupo (en orden). */
-const RESPALDO = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
+// Primero los livianos (flash-lite): responden más rápido y alcanzan para leer pedidos.
+const RESPALDO = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-2.5-flash']
 /** Esperas entre reintentos con el mismo modelo (milisegundos). */
 const ESPERAS = [1500, 4000]
 
@@ -89,7 +90,7 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL')
   const anon = Deno.env.get('SUPABASE_ANON_KEY')
   const clave = Deno.env.get('GEMINI_API_KEY')
-  const modelo = Deno.env.get('GEMINI_MODEL') || 'gemini-flash-latest'
+  const modelo = Deno.env.get('GEMINI_MODEL') || 'gemini-flash-lite-latest'
   if (!url || !anon) return responder({ error: 'Falta configuración de Supabase en la función.' }, 500)
   if (!clave) return responder({ error: 'Falta la clave de Gemini: cargá el secreto GEMINI_API_KEY en Supabase (Edge Functions > Secrets).' }, 500)
 
