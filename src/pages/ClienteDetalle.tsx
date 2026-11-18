@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -238,10 +239,8 @@ export default function ClienteDetalle() {
       <div className="grid gap-3">
         <div className="flex flex-wrap items-end gap-3">
           <h2 className="mr-auto text-lg font-semibold">Historial de precios</h2>
-          <Select className="w-72" value={skuNuevo} onChange={(e) => setSkuNuevo(e.target.value)}>
-            <option value="">Tildar otro SKU para este cliente…</option>
-            {disponibles.map((s) => <option key={s.sku} value={s.sku}>{s.sku} · {s.descripcion}</option>)}
-          </Select>
+          <Combobox className="w-80" value={skuNuevo} onChange={setSkuNuevo} placeholder="Tildar otro SKU para este cliente…"
+            opciones={disponibles.map((s) => ({ value: String(s.sku), label: s.descripcion, detalle: String(s.sku) }))} />
           <Button variant="secondary" onClick={agregarSku} disabled={!skuNuevo}>Agregar</Button>
         </div>
         <p className="text-xs text-muted-foreground">

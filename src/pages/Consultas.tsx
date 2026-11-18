@@ -10,6 +10,7 @@ import { nombreModalidad, type IndiceCliente, type PrecioCliente, type PrecioDet
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
@@ -220,9 +221,8 @@ export default function Consultas() {
           <div className="grid gap-4">
             <div className="flex flex-wrap items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => setSkuSel('')}>← Todos los SKUs</Button>
-              <Select className="w-80" value={skuSel} onChange={(e) => setSkuSel(e.target.value)}>
-                {porSku.map((s) => <option key={s.sku} value={s.sku}>{s.sku} · {s.descripcion}</option>)}
-              </Select>
+              <Combobox className="w-96" value={String(skuSel)} onChange={(v) => setSkuSel(v)} placeholder="Buscar SKU por número o producto…"
+                opciones={porSku.map((s) => ({ value: String(s.sku), label: s.descripcion, detalle: String(s.sku) }))} />
               <Button variant="outline" size="sm" onClick={() => setOrden(orden === 'desc' ? 'asc' : 'desc')}>
                 <ArrowDownUp /> {orden === 'desc' ? 'Mayor a menor' : 'Menor a mayor'}
               </Button>
@@ -350,10 +350,8 @@ export default function Consultas() {
         return (
           <div className="grid gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <Select className="w-96" value={clienteSel} onChange={(e) => setClienteSel(e.target.value)}>
-                <option value="">Elegí un cliente…</option>
-                {opciones.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </Select>
+              <Combobox className="w-96" value={String(clienteSel)} onChange={(v) => setClienteSel(v)} placeholder="Escribí parte del nombre o del código…"
+                opciones={opciones.map((c) => ({ value: String(c.id), label: c.nombre, detalle: c.nro_cliente ?? undefined }))} />
               {clienteSel && <Link className="text-sm text-primary hover:underline" to={`/clientes/${clienteSel}`}>Ver historial completo</Link>}
               {filas.length > 0 && <div className="ml-auto"><BotonExportar onClick={() => exportarExcel(`ficha_${clienteSel}_${aInputMes(mes)}`, ['SKU', 'Producto', 'Precio', 'Anterior', 'Variación %', 'Promedio', 'vs promedio %', 'Puesto (1 = más barato)', 'De'],
                 filas.map((f) => [f.sku, f.descripcion, f.precio, f.anterior, r1(varPct(f.precio, f.anterior)), r1(f.prom), r1(varPct(f.precio, f.prom)), f.puesto, f.de]))} /></div>}
