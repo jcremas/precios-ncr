@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, redondear } from '@/lib/formato'
 import { exportarExcel, listaVigente, precioConDescuento } from '@/lib/precios'
-import { NIVELES, type ListaGeneral as Lista, type Sku } from '@/lib/tipos'
+import type { ListaGeneral as Lista, Sku } from '@/lib/tipos'
+import { useNiveles } from '@/lib/niveles'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +18,8 @@ const aNumero = (t: string) => Number(t.trim().replace(/\$|\s/g, '').replace(/\.
 interface Edicion { precio: string; minimo: string }
 
 export default function ListaGeneral() {
+  const { niveles } = useNiveles()
+  const conDescuento = niveles.filter((n) => n.descuento_pct > 0)
   const [skus, setSkus] = useState<Sku[]>([])
   const [listas, setListas] = useState<Lista[]>([])
   const [mes, setMes] = useState(mesActual())
@@ -143,10 +146,10 @@ export default function ListaGeneral() {
   }
 
   function exportar() {
-    exportarExcel(`lista_general_${aInputMes(mes)}`, ['SKU', 'Producto', 'Sin descuento', ...NIVELES, 'Mínimo'],
+    exportarExcel(`lista_general_${aInputMes(mes)}`, ['SKU', 'Producto', 'Sin descuento', ...niveles.map((n) => n.nombre), 'Mínimo'],
       filas.filter((f) => f.precio != null).map((f) => [
         f.s.sku, f.s.descripcion, f.s.admite_descuento ? '' : 'SÍ',
-        ...NIVELES.map((n) => precioConDescuento(f.precio!, n, f.s.admite_descuento)), f.minimo,
+        ...niveles.map((n) => precioConDescuento(f.precio!, n.descuento_pct, f.s.admite_descuento)), f.minimo,
       ]))
   }
 
@@ -208,7 +211,7 @@ export default function ListaGeneral() {
             <TableHead className="text-right">Anterior</TableHead>
             <TableHead className="w-32 text-right">LISTA</TableHead>
             <TableHead className="text-right">Var.</TableHead>
-            {NIVELES.slice(1).map((n) => <TableHead key={n} className="text-right">{n}</TableHead>)}
+            {conDescuento.map((n) => <TableHead key={n.nombre} className="text-right">{n.nombre}</TableHead>)}
             <TableHead className="w-32 text-right">Mínimo</TableHead>
           </TableRow>
         </TableHeader>
@@ -227,8 +230,8 @@ export default function ListaGeneral() {
                   <Input className="h-8 text-right tabular-nums" inputMode="decimal" aria-label={`LISTA ${f.s.sku}`} aria-invalid={f.invalido} value={f.e.precio} onChange={(e) => set(f.s.sku, 'precio', e.target.value)} />
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{varPct != null && Math.abs(varPct) >= 0.05 && <Badge variant={varPct < 0 ? 'baja' : 'outline'}>{pct(varPct)}</Badge>}</TableCell>
-                {NIVELES.slice(1).map((n) => (
-                  <TableCell key={n} className="text-right tabular-nums">{f.precio != null ? precio(precioConDescuento(f.precio, n, f.s.admite_descuento)) : ''}</TableCell>
+                {conDescuento.map((n) => (
+                  <TableCell key={n.nombre} className="text-right tabular-nums">{f.precio != null ? precio(precioConDescuento(f.precio, n.descuento_pct, f.s.admite_descuento)) : ''}</TableCell>
                 ))}
                 <TableCell>
                   <Input className="h-8 text-right tabular-nums" inputMode="decimal" aria-label={`Mínimo ${f.s.sku}`} value={f.e.minimo} onChange={(e) => set(f.s.sku, 'minimo', e.target.value)} />

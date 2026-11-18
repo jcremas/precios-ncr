@@ -4,6 +4,7 @@ import { mensajeError } from '@/lib/datos'
 import { nombreMes, precio } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente, type Modalidad } from '@/lib/tipos'
 import { Input } from '@/components/ui/input'
+import { useNiveles } from '@/lib/niveles'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -16,7 +17,8 @@ interface Linea { sku: number; descripcion: string; precio: number; mes: string;
 const fmtUnidades = new Intl.NumberFormat('es-AR')
 
 export default function Cotizar() {
-  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel' | 'nro_cliente' | 'modalidad' | 'cotiza'>[]>([])
+  const { nombre: nombreNivel } = useNiveles()
+  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel_id' | 'nro_cliente' | 'modalidad' | 'cotiza'>[]>([])
   const [id, setId] = useState('')
   const [modalidad, setModalidad] = useState<Modalidad | ''>('')
   const [buscar, setBuscar] = useState('')
@@ -25,7 +27,7 @@ export default function Cotizar() {
   const [copiado, setCopiado] = useState(false)
 
   useEffect(() => {
-    supabase.from('clientes').select('id, nombre, nivel, nro_cliente, modalidad, cotiza').eq('activo', true).order('nombre')
+    supabase.from('clientes').select('id, nombre, nivel_id, nro_cliente, modalidad, cotiza').eq('activo', true).order('nombre')
       .then(({ data }) => setClientes(data ?? []))
   }, [])
 
@@ -127,7 +129,7 @@ ${lineas.map((l, i) => {
           <Label htmlFor="cli">Cliente</Label>
           <Select id="cli" value={id} onChange={(e) => setId(e.target.value)}>
             <option value="">Elegí un cliente ({visibles.length})</option>
-            {visibles.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {nombreModalidad(c.modalidad)}{c.nivel ? ` ${c.nivel}` : ''}{c.cotiza ? '' : ' · NO COTIZA'}</option>)}
+            {visibles.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {nombreModalidad(c.modalidad)}{c.nivel_id != null ? ` ${nombreNivel(c.nivel_id)}` : ''}{c.cotiza ? '' : ' · NO COTIZA'}</option>)}
           </Select>
           </div>
         </CardContent>
@@ -138,7 +140,7 @@ ${lineas.map((l, i) => {
       {lineas.length > 0 && (
         <div className="grid gap-3">
           <div className="flex items-center gap-3">
-            <Badge>{cliente && nombreModalidad(cliente.modalidad)}{cliente?.nivel ? ` · ${cliente.nivel}` : ''}</Badge>
+            <Badge>{cliente && nombreModalidad(cliente.modalidad)}{cliente?.nivel_id != null ? ` · ${nombreNivel(cliente.nivel_id)}` : ''}</Badge>
             <span className="text-sm text-muted-foreground">{lineas.length} SKU(s)</span>
             <Button className="ml-auto" variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓ Pegalo en el correo' : 'Copiar para enviar'}</Button>
           </div>

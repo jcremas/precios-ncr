@@ -5,12 +5,12 @@ export type DatosCliente = Omit<Cliente, 'id' | 'activo'>
 
 export const clienteVacio: DatosCliente = {
   nro_cliente: '', segmento: '', nombre: '', contacto: '', email: '', condicion_pago: '',
-  modalidad: 'GENERICO', nivel: 'LISTA', cotiza: true, observaciones: '',
+  modalidad: 'GENERICO', nivel_id: null, cotiza: true, observaciones: '',
 }
 
 const CAMPOS: (keyof DatosCliente)[] = [
   'nro_cliente', 'segmento', 'nombre', 'contacto', 'email', 'condicion_pago',
-  'modalidad', 'nivel', 'cotiza', 'observaciones',
+  'modalidad', 'nivel_id', 'cotiza', 'observaciones',
 ]
 
 /** Solo los campos editables (sin id ni fechas), para guardar en la base. */

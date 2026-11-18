@@ -12,6 +12,7 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 | `supabase/migrations/0001_esquema.sql` | Crea las tablas, la seguridad (login + RLS) y las vistas. Se corre una sola vez. |
 | `supabase/migrations/0002_precios_genericos_al_instante.sql` | Precios de los genéricos al instante (al crearlos o cambiarles el nivel). Se corre después de 0001. |
 | `supabase/migrations/0003_datos_sku.sql` | Peso, unidades por pallet y color de cada SKU. |
+| `supabase/migrations/0004_niveles_editables.sql` | Niveles de descuento con número fijo (id), editables (nombre, %, orden). Clientes enlazados por `nivel_id`. |
 | `supabase/reset.sql` | Borra todo lo de la app para empezar de cero. |
 | `migracion/importar_excel.py` | Lee el Excel y genera el SQL con los datos iniciales. El Excel y el SQL generado **nunca** se suben. |
 | `.env.example` | Modelo del archivo de claves. El `.env` real no se sube. |
@@ -28,6 +29,7 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 2. **New query** otra vez: abrí `supabase/migrations/0001_esquema.sql`, copiá todo, pegalo y apretá **Run**. Tiene que decir *Success*.
 3. **New query** otra vez con `supabase/migrations/0002_precios_genericos_al_instante.sql` → **Run**. Hace que un cliente genérico tenga sus precios apenas se crea o se le cambia el nivel. Se puede correr más de una vez sin problema.
 4. **New query** con `supabase/migrations/0003_datos_sku.sql` → **Run**. Agrega a los SKUs peso, unidades por pallet y color.
+5. **New query** con `supabase/migrations/0004_niveles_editables.sql` → **Run**. Permite editar los niveles de descuento desde la app: cada nivel pasa a tener un número fijo (id) y los clientes quedan enlazados a ese número, así se puede cambiar el nombre sin perder nada. Conserva el nivel de cada cliente. Después de este, no vuelvas a correr el 0002.
 
 ### 3. Cerrar el registro público y crear tu usuario
 1. **Authentication → Sign In / Providers → Email**: dejá Email activado y **desactivá "Allow new users to sign up"**. Así nadie se puede registrar solo.
@@ -90,7 +92,7 @@ El script muestra un resumen (51 clientes especiales, 28 SKUs, lista general de 
 ## Cómo funciona la base
 
 - **clientes**: nombre completo, código de cliente único y **modalidad**:
-  - **Genérico**: paga la lista general menos el descuento de su nivel (LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%). Sus precios se guardan solos al **crearlo**, al **cambiarle el nivel**, al **tildarle un SKU** (mes actual, con la lista vigente) y al **publicar** cada lista general. Los meses anteriores no se tocan.
+  - **Genérico**: paga la lista general menos el descuento de su nivel (arrancan LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%; se editan en la pantalla Niveles). Sus precios se guardan solos al **crearlo**, al **cambiarle el nivel**, al **tildarle un SKU** (mes actual, con la lista vigente) y al **publicar** cada lista general. Los meses anteriores no se tocan.
   - **Especial**: tiene su lista propia. La primera se arma con la lista general menos un descuento elegido; después se maneja con % y a mano en Envío mensual.
   - **Cotiza** sí/no: un cliente que no cotiza queda bloqueado sin borrarlo.
 - **skus**: el número de SKU es la clave permanente (siempre entero). **Admite descuento** = no: vale el precio de lista en todos los niveles.
@@ -108,4 +110,5 @@ El script muestra un resumen (51 clientes especiales, 28 SKUs, lista general de 
 | Clientes | Índice, alta y edición. En la ficha: historial, mapa de SKUs y, para un especial nuevo, armar su primera lista. |
 | Consultas | Por SKU (mín., máx., promedio, mediana y detalle ordenable), ranking de clientes, brecha contra la lista, ficha, envíos del mes, desactualizados y cobertura. Todo se exporta a Excel. |
 | Cotizar | Precios vigentes de cualquier cliente (filtro genéricos/especiales y búsqueda), con unidades por pallet, en texto compacto para pegar en el correo. |
+| Niveles | Agregar niveles de descuento, cambiar nombre, % y orden. Al cambiar el % se recalculan los precios del mes de sus genéricos. Un nivel con clientes no se borra. |
 | SKUs | Alta y edición, estado, si admite descuento, peso, unidades por pallet y color (también pegando desde Excel). |

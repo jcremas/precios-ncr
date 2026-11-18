@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { mensajeError, preciosDeClientes } from '@/lib/datos'
 import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { listaVigente, precioConDescuento } from '@/lib/precios'
-import { DESCUENTOS, NIVELES, nombreModalidad, type Cliente, type ListaGeneral, type Nivel, type PrecioCliente, type Sku } from '@/lib/tipos'
+import { etiquetaNivel, useNiveles } from '@/lib/niveles'
+import { nombreModalidad, type Cliente, type ListaGeneral, type PrecioCliente, type Sku } from '@/lib/tipos'
 import { traducirError, type DatosCliente } from '@/lib/clientes'
 import { FormCliente } from '@/components/FormCliente'
 import { Button } from '@/components/ui/button'
@@ -28,7 +29,8 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
   onGuardado: () => void
 }) {
   const ultimaLista = listas.reduce((m, l) => (l.mes > m ? l.mes : m), '')
-  const [nivel, setNivel] = useState<Nivel>(cliente.nivel ?? 'LISTA')
+  const { niveles, descuento } = useNiveles()
+  const [nivel, setNivel] = useState<number | null>(cliente.nivel_id ?? niveles[0]?.id ?? null)
   // Por defecto, el mes de la última lista general (el período vigente).
   const [mes, setMes] = useState(ultimaLista || mesActual())
   const [editados, setEditados] = useState<Record<number, string>>({})
@@ -40,7 +42,7 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
     .map((sku) => {
       const l = vigente.get(sku)
       const s = skus.get(sku)
-      const calculado = l && s ? precioConDescuento(Number(l.precio), nivel, s.admite_descuento) : null
+      const calculado = l && s ? precioConDescuento(Number(l.precio), descuento(nivel), s.admite_descuento) : null
       return { sku, descripcion: s?.descripcion ?? '', lista: l ? Number(l.precio) : null, minimo: l?.precio_minimo ?? null, calculado, sinDescuento: s ? !s.admite_descuento : false }
     })
     .sort((a, b) => a.descripcion.localeCompare(b.descripcion))
@@ -58,7 +60,7 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
     setGuardando(false)
     if (error) return setError(mensajeError(error))
     // Si el cliente no tenía nivel de referencia, queda el descuento con que arrancó.
-    if (!cliente.nivel) await supabase.from('clientes').update({ nivel }).eq('id', cliente.id)
+    if (cliente.nivel_id == null && nivel != null) await supabase.from('clientes').update({ nivel_id: nivel }).eq('id', cliente.id)
     onGuardado()
   }
 
@@ -74,8 +76,8 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
         <div className="flex flex-wrap items-end gap-3">
           <div className="grid gap-2">
             <Label htmlFor="nivel-ini">Descuento de partida</Label>
-            <Select id="nivel-ini" className="w-48" value={nivel} onChange={(e) => { setNivel(e.target.value as Nivel); setEditados({}) }}>
-              {NIVELES.map((n) => <option key={n} value={n}>{n} ({DESCUENTOS[n]}%)</option>)}
+            <Select id="nivel-ini" className="w-48" value={nivel ?? ''} onChange={(e) => { setNivel(Number(e.target.value)); setEditados({}) }}>
+              {niveles.map((n) => <option key={n.id} value={n.id}>{etiquetaNivel(n)}</option>)}
             </Select>
           </div>
           <div className="grid gap-2">
@@ -116,6 +118,7 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
 }
 
 export default function ClienteDetalle() {
+  const { descuento, nombre } = useNiveles()
   const id = Number(useParams().id)
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [skus, setSkus] = useState<Sku[]>([])
@@ -202,7 +205,7 @@ export default function ClienteDetalle() {
         <CardHeader className="flex flex-row flex-wrap items-center gap-3">
           <CardTitle className="text-xl">{cliente.nombre}</CardTitle>
           <Badge variant={cliente.modalidad === 'ESPECIAL' ? 'default' : 'secondary'}>{nombreModalidad(cliente.modalidad)}</Badge>
-          {cliente.nivel && <Badge variant="outline">{cliente.nivel} ({DESCUENTOS[cliente.nivel]}%)</Badge>}
+          {cliente.nivel_id != null && <Badge variant="outline">{nombre(cliente.nivel_id)} ({String(descuento(cliente.nivel_id)).replace('.', ',')}%)</Badge>}
           {!cliente.cotiza && <Badge variant="baja">No cotiza</Badge>}
           {!cliente.nro_cliente && <Badge variant="alerta">Falta código de cliente</Badge>}
           {!editando && <Button className="ml-auto" variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}

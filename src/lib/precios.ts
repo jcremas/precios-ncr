@@ -1,9 +1,9 @@
-import { DESCUENTOS, type ListaGeneral, type Nivel } from '@/lib/tipos'
+import type { ListaGeneral } from '@/lib/tipos'
 
 /** Igual que la función precio_con_descuento de la base: 1 decimal. */
-export function precioConDescuento(lista: number, nivel: Nivel, admiteDescuento: boolean): number {
+export function precioConDescuento(lista: number, descuentoPct: number, admiteDescuento: boolean): number {
   if (!admiteDescuento) return lista
-  return Math.round((lista * (1 - DESCUENTOS[nivel] / 100) + 1e-9) * 10) / 10
+  return Math.round((lista * (1 - descuentoPct / 100) + 1e-9) * 10) / 10
 }
 
 /** Lista vigente a un mes: para cada SKU, la última cargada en ese mes o antes. */
