@@ -21,6 +21,8 @@ export default function Cotizar() {
   const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel_id' | 'nro_cliente' | 'modalidad' | 'cotiza'>[]>([])
   const [id, setId] = useState('')
   const [modalidad, setModalidad] = useState<Modalidad | ''>('')
+  const [meses, setMeses] = useState<string[]>([])
+  const [mes, setMes] = useState('')
   const [lineas, setLineas] = useState<Linea[]>([])
   const [aviso, setAviso] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
@@ -33,25 +35,46 @@ export default function Cotizar() {
   const cliente = clientes.find((c) => String(c.id) === id)
   const visibles = clientes.filter((c) => !modalidad || c.modalidad === modalidad)
 
+  // Al elegir cliente: sus meses cotizables, del más nuevo al más viejo.
   useEffect(() => {
+    setMeses([])
+    setMes('')
     setLineas([])
     setAviso(null)
     setCopiado(false)
     if (!cliente) return
     if (!cliente.cotiza) return setAviso('Este cliente está marcado como NO COTIZA.')
-    Promise.all([cotizar(cliente), supabase.from('skus').select('sku, unidades_pallet')]).then(([{ lineas, error }, s]) => {
-      if (error) return setAviso(error)
-      const pallet = new Map((s.data ?? []).map((x) => [x.sku, x.unidades_pallet as number | null]))
-      setLineas(lineas.map((l) => ({ ...l, pallet: pallet.get(l.sku) ?? null })))
-      if (!lineas.length) setAviso(cliente.modalidad === 'ESPECIAL' ? 'Este cliente todavía no tiene precios cargados.' : 'El cliente no tiene SKUs tildados en la última lista general ni precios guardados.')
+    let vigente = true
+    supabase.rpc('meses_cotizables', { p_cliente_id: cliente.id }).then(({ data, error }) => {
+      if (!vigente) return
+      if (error) return setAviso(mensajeError(error))
+      const lista = ((data ?? []) as { mes: string }[]).map((x) => x.mes)
+      setMeses(lista)
+      if (lista.length) setMes(lista[0])
+      else setAviso(cliente.modalidad === 'ESPECIAL' ? 'Este cliente todavía no tiene precios cargados.' : 'No hay lista general cargada ni precios guardados para este cliente.')
     })
+    return () => { vigente = false }
   }, [cliente])
 
-  /** Solo los precios del mes más nuevo (no se mezclan meses).
-   *  Genérico: última lista general menos su descuento (o, si no hay lista,
-   *  sus precios guardados del último mes). Especial: su último mes. */
-  async function cotizar(c: NonNullable<typeof cliente>): Promise<{ lineas: Linea[]; error?: string }> {
-    const { data, error } = await supabase.rpc('cotizar', { p_cliente_id: c.id })
+  // Al elegir mes: solo los precios de ese mes.
+  useEffect(() => {
+    setLineas([])
+    setCopiado(false)
+    if (!cliente || !mes || !meses.includes(mes)) return
+    let vigente = true
+    Promise.all([cotizar(cliente, mes), supabase.from('skus').select('sku, unidades_pallet')]).then(([{ lineas, error }, s]) => {
+      if (!vigente) return
+      if (error) return setAviso(error)
+      setAviso(lineas.length ? null : 'El cliente no tiene SKUs tildados con precio en ese mes.')
+      const pallet = new Map((s.data ?? []).map((x) => [x.sku, x.unidades_pallet as number | null]))
+      setLineas(lineas.map((l) => ({ ...l, pallet: pallet.get(l.sku) ?? null })))
+    })
+    return () => { vigente = false }
+  }, [cliente, mes, meses])
+
+  /** Solo los precios del mes elegido (no se mezclan meses). */
+  async function cotizar(c: NonNullable<typeof cliente>, m: string): Promise<{ lineas: Linea[]; error?: string }> {
+    const { data, error } = await supabase.rpc('cotizar', { p_cliente_id: c.id, p_mes: m })
     if (error) return { lineas: [], error: mensajeError(error) }
     return { lineas: (data ?? []) as Linea[] }
   }
@@ -95,9 +118,9 @@ ${lineas.map((l, i) => {
       <Card>
         <CardHeader>
           <CardTitle>Cotizar a un cliente</CardTitle>
-          <CardDescription>Solo los precios del mes más nuevo, sin mezclar meses: si un SKU no tiene precio ese mes, no se cotiza. Genérico: última lista general menos el descuento de su nivel. Especial: su último mes cargado. No cotiza: bloqueado. Solo SKUs tildados.</CardDescription>
+          <CardDescription>Solo los precios del mes elegido, sin mezclar meses (de entrada, el más nuevo). Si un SKU no tiene precio ese mes o está en cero, no se cotiza. Especial: su lista de ese mes. Genérico: sus precios guardados ese mes o, si no hay, la lista general de ese mes menos el descuento de su nivel. No cotiza: bloqueado. Solo SKUs tildados.</CardDescription>
         </CardHeader>
-        <CardContent className="grid max-w-3xl gap-4 md:grid-cols-[180px_1fr]">
+        <CardContent className="grid max-w-4xl gap-4 md:grid-cols-[180px_1fr_190px]">
           <div className="grid gap-2">
             <Label htmlFor="mod">Tipo de cliente</Label>
             <Select id="mod" value={modalidad} onChange={(e) => setModalidad(e.target.value as Modalidad | '')}>
@@ -113,6 +136,13 @@ ${lineas.map((l, i) => {
                 label: c.nombre,
                 detalle: [c.nro_cliente, `${nombreModalidad(c.modalidad)}${c.nivel_id != null ? ` ${nombreNivel(c.nivel_id)}` : ''}`, c.cotiza ? null : 'NO COTIZA'].filter(Boolean).join(' · '),
               }))} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="mes">Mes</Label>
+            <Select id="mes" value={mes} onChange={(e) => setMes(e.target.value)} disabled={!meses.length}>
+              {!meses.length && <option value="">—</option>}
+              {meses.map((m, i) => <option key={m} value={m}>{nombreMes(m)}{i === 0 ? ' (último)' : ''}</option>)}
+            </Select>
           </div>
         </CardContent>
       </Card>
