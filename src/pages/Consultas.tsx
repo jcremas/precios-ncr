@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowDownUp, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { mensajeError, traerTodo } from '@/lib/datos'
+import { grillasActivas, mensajeError, preciosDeClientes, traerTodo } from '@/lib/datos'
 import { aInputMes, nombreMes, pct, precio } from '@/lib/formato'
 import { exportarExcel, mediana } from '@/lib/precios'
 import { useNiveles } from '@/lib/niveles'
@@ -74,7 +74,7 @@ export default function Consultas() {
           supabase.from('precios_cliente').select('mes').order('mes', { ascending: false }).limit(1),
           supabase.from('skus').select('*').order('descripcion'),
           supabase.from('v_indice_clientes').select('*').order('nombre'),
-          traerTodo<{ cliente_id: number; sku: number }>((d, h) => supabase.from('cliente_skus').select('cliente_id, sku').eq('activo', true).range(d, h)),
+          grillasActivas(),
         ])
         setSkus((s.data ?? []) as Sku[])
         setIndice((i.data ?? []) as IndiceCliente[])
@@ -102,7 +102,7 @@ export default function Consultas() {
   // Detalle del mes elegido (todos los clientes, solo SKUs tildados).
   useEffect(() => {
     if (!mes) return
-    traerTodo<PrecioDetalle>((d, h) => supabase.from('v_precios_detalle').select('*').eq('mes', mes).range(d, h))
+    traerTodo<PrecioDetalle>((d, h) => supabase.from('v_precios_detalle').select('*').eq('mes', mes).order('cliente_id').order('sku').range(d, h))
       .then((rows) => setDetalle(rows.map((r) => ({ ...r, precio: Number(r.precio), lista: r.lista == null ? null : Number(r.lista), matar: r.matar == null ? null : Number(r.matar), precio_minimo: r.precio_minimo == null ? null : Number(r.precio_minimo) }))))
       .catch((e) => setError(mensajeError(e)))
   }, [mes])
@@ -111,7 +111,7 @@ export default function Consultas() {
   useEffect(() => {
     const ids = indice.filter((c) => c.modalidad === 'ESPECIAL').map((c) => c.id)
     if (!ids.length) return
-    traerTodo<PrecioCliente>((d, h) => supabase.from('precios_cliente').select('cliente_id, sku, mes, precio').in('cliente_id', ids).order('mes').range(d, h))
+    preciosDeClientes(ids)
       .then((rows) => setHistorial(rows.map((r) => ({ ...r, precio: Number(r.precio) }))))
       .catch((e) => setError(mensajeError(e)))
   }, [indice])

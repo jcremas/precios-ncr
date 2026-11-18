@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { mensajeError } from '@/lib/datos'
+import { listasGenerales, mensajeError } from '@/lib/datos'
 import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, redondear } from '@/lib/formato'
 import { exportarExcel, listaVigente, precioConDescuento } from '@/lib/precios'
 import type { ListaGeneral as Lista, Sku } from '@/lib/tipos'
@@ -16,6 +16,10 @@ const aTexto = (n: number | null | undefined) => (n == null ? '' : String(n).rep
 const aNumero = (t: string) => Number(t.trim().replace(/\$|\s/g, '').replace(/\.(?=\d{3}(,|$))/g, '').replace(',', '.'))
 
 interface Edicion { precio: string; minimo: string }
+/** Estado de una lista (vista v_estado_listas). */
+interface EstadoLista { mes: string; skus: number; publicada_en: string | null; ultimo_cambio: string | null }
+
+const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 export default function ListaGeneral() {
   const { niveles } = useNiveles()
@@ -28,20 +32,24 @@ export default function ListaGeneral() {
   const [pegado, setPegado] = useState('')
   const [verPegar, setVerPegar] = useState(false)
   const [genericos, setGenericos] = useState(0)
+  const [estados, setEstados] = useState<EstadoLista[]>([])
   const [estado, setEstado] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
   const [ocupado, setOcupado] = useState(false)
 
   async function cargar(mesElegido?: string) {
-    const [s, l, g] = await Promise.all([
+    const [s, l, g, e] = await Promise.all([
       supabase.from('skus').select('*').order('descripcion'),
-      supabase.from('lista_general').select('mes, sku, precio, precio_minimo'),
+      listasGenerales().catch((err) => err as Error),
       supabase.from('clientes').select('id', { count: 'exact', head: true }).eq('modalidad', 'GENERICO').eq('cotiza', true).eq('activo', true),
+      supabase.from('v_estado_listas').select('mes, skus, publicada_en, ultimo_cambio'),
     ])
-    if (s.error || l.error) return setEstado({ tipo: 'error', texto: mensajeError(s.error ?? l.error) })
+    if (l instanceof Error) return setEstado({ tipo: 'error', texto: mensajeError(l) })
+    const ls = l
+    if (s.error) return setEstado({ tipo: 'error', texto: mensajeError(s.error) })
     setSkus(s.data as Sku[])
-    const ls = (l.data ?? []) as Lista[]
     setListas(ls)
     setGenericos(g.count ?? 0)
+    setEstados((e.data ?? []) as EstadoLista[])
     if (!mesElegido) {
       const ultima = ls.reduce((m, x) => (x.mes > m ? x.mes : m), '')
       if (ultima) setMes(ultima)
@@ -132,7 +140,7 @@ export default function ListaGeneral() {
     if (!error && borrar.length) error = (await supabase.from('lista_general').delete().eq('mes', mes).in('sku', borrar)).error
     setOcupado(false)
     if (error) return setEstado({ tipo: 'error', texto: mensajeError(error) })
-    setEstado({ tipo: 'ok', texto: `Lista de ${nombreMes(mes)} guardada. Para que llegue a los clientes genéricos, apretá Publicar.` })
+    setEstado({ tipo: 'ok', texto: `Lista de ${nombreMes(mes)} guardada. Para que llegue a los clientes genéricos y a Cotizar, apretá Publicar.` })
     await cargar(mes)
   }
 
@@ -143,7 +151,12 @@ export default function ListaGeneral() {
     setOcupado(false)
     if (error) return setEstado({ tipo: 'error', texto: mensajeError(error) })
     setEstado({ tipo: 'ok', texto: `Lista de ${nombreMes(mes)} publicada: ${data} precio(s) nuevos o corregidos en clientes genéricos.` })
+    await cargar(mes)
   }
+
+  // Borrador / publicada / publicada con cambios sin publicar.
+  const est = estados.find((x) => x.mes === mes)
+  const sinPublicar = !!est && (!est.publicada_en || (!!est.ultimo_cambio && est.ultimo_cambio > est.publicada_en))
 
   function exportar() {
     exportarExcel(`lista_general_${aInputMes(mes)}`, ['SKU', 'Producto', 'Sin descuento', ...niveles.map((n) => n.nombre), 'Mínimo'],
@@ -159,7 +172,7 @@ export default function ListaGeneral() {
         <CardHeader>
           <CardTitle>Lista general</CardTitle>
           <CardDescription>
-            Un precio de LISTA por SKU y mes, más el precio mínimo (piso) de referencia. Los demás niveles se calculan con su descuento y se redondean a 1 decimal; los SKUs "sin descuento" valen lo mismo en todos los niveles. Guardá la lista y después publicala para actualizar a los clientes genéricos.
+            Un precio de LISTA por SKU y mes, más el precio mínimo (piso) de referencia. Los demás niveles se calculan con su descuento y se redondean a 1 decimal; los SKUs "sin descuento" valen lo mismo en todos los niveles. Guardá la lista y después publicala: mientras no la publiques es un borrador y no llega a los clientes genéricos ni a Cotizar. Si corregís un precio ya guardado, el valor anterior queda registrado.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
@@ -192,12 +205,15 @@ export default function ListaGeneral() {
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm text-muted-foreground">
           {delMes.size ? `${delMes.size} SKU(s) guardados en ${nombreMes(mes)}` : `Todavía no hay lista de ${nombreMes(mes)}`}
+          {est && (est.publicada_en
+            ? <Badge variant={sinPublicar ? 'alerta' : 'outline'} className="ml-2">{sinPublicar ? `Publicada el ${fechaHora(est.publicada_en)}, con cambios sin publicar` : `Publicada el ${fechaHora(est.publicada_en)}`}</Badge>
+            : <Badge variant="alerta" className="ml-2">Borrador: todavía no llega a los genéricos ni a Cotizar</Badge>)}
           {cambios.length > 0 && ` · ${cambios.length} cambio(s) sin guardar`}
           {invalidos.length > 0 && ` · ${invalidos.length} valor(es) inválido(s)`}
         </p>
         <div className="ml-auto flex gap-2">
           <Button onClick={guardar} disabled={ocupado || !cambios.length || invalidos.length > 0}>Guardar lista</Button>
-          <Button variant="secondary" onClick={publicar} disabled={ocupado || !delMes.size || cambios.length > 0}>
+          <Button variant={sinPublicar ? 'default' : 'secondary'} onClick={publicar} disabled={ocupado || !delMes.size || cambios.length > 0}>
             Publicar a {genericos} genérico(s)
           </Button>
         </div>

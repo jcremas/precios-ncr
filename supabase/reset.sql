@@ -2,10 +2,11 @@
 -- RESET: BORRA TODAS LAS TABLAS Y DATOS DE LA APP DE PRECIOS.
 -- No se puede deshacer. Usalo solo para empezar de cero.
 -- No toca los usuarios de login (Authentication > Users).
--- Después de esto, correr supabase/migrations/0001_esquema.sql y luego 0002, 0003 y 0004.
+-- Después de esto, correr supabase/migrations/0001_esquema.sql y luego 0002, 0003, 0004, 0005 y 0006, en ese orden.
 -- =====================================================================
 
 -- Vistas
+drop view if exists public.v_estado_listas cascade;
 drop view if exists public.v_precios_detalle cascade;
 drop view if exists public.v_lista_niveles cascade;
 drop view if exists public.v_resumen_sku_mes cascade;
@@ -19,6 +20,8 @@ drop view if exists public.v_ultimo_precio cascade;
 drop table if exists public.precios_competencia cascade;
 drop table if exists public.precios_cliente_cambios cascade;
 drop table if exists public.precios_cliente cascade;
+drop table if exists public.listas_publicadas cascade;
+drop table if exists public.lista_general_cambios cascade;
 drop table if exists public.lista_general cascade;
 drop table if exists public.lista_precios cascade;
 drop table if exists public.cliente_skus cascade;
@@ -28,6 +31,9 @@ drop table if exists public.niveles cascade;
 drop table if exists public.usuarios_autorizados cascade;
 
 -- Funciones
+drop function if exists public.registrar_cambio_lista() cascade;
+drop function if exists public.ultima_lista_publicada() cascade;
+drop function if exists public.lista_vigente_publicada(date) cascade;
 drop function if exists public.recalcular_nivel_trg() cascade;
 drop function if exists public.recalcular_cliente_trg() cascade;
 drop function if exists public.recalcular_sku_cliente_trg() cascade;

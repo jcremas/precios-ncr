@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { mensajeError, preciosDeClientes } from '@/lib/datos'
+import { listasGenerales, mensajeError, preciosDeClientes } from '@/lib/datos'
 import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { listaVigente, precioConDescuento } from '@/lib/precios'
 import { etiquetaNivel, useNiveles } from '@/lib/niveles'
@@ -136,14 +136,14 @@ export default function ClienteDetalle() {
       supabase.from('skus').select('*').order('descripcion'),
       supabase.from('cliente_skus').select('sku, activo').eq('cliente_id', id),
       preciosDeClientes([id]),
-      supabase.from('lista_general').select('mes, sku, precio, precio_minimo'),
+      listasGenerales(),
     ])
     if (c.error) return setError(mensajeError(c.error))
     setCliente(c.data as Cliente)
     setSkus((s.data ?? []) as Sku[])
     setGrilla(g.data ?? [])
     setPrecios(p)
-    setListas((l.data ?? []) as ListaGeneral[])
+    setListas(l)
   }
   useEffect(() => {
     cargar()
