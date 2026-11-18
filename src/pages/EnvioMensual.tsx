@@ -7,7 +7,7 @@ import type { Cliente, ListaGeneral, Origen, PrecioCliente, Sku } from '@/lib/ti
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -190,15 +190,13 @@ export default function EnvioMensual() {
         <CardContent className="grid gap-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
           <div className="grid gap-2">
             <Label htmlFor="cliente">Cliente</Label>
-            <Select id="cliente" value={seleccion} onChange={(e) => setSeleccion(e.target.value)} disabled={cargando}>
-              <option value="">{cargando ? 'Cargando…' : 'Elegí un cliente'}</option>
-              <option value={TODOS}>TODOS los clientes especiales ({clientes.length})</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}{c.nro_cliente ? ` (${c.nro_cliente})` : ''}
-                </option>
-              ))}
-            </Select>
+            <Combobox id="cliente" value={seleccion} onChange={setSeleccion} disabled={cargando}
+              placeholder={cargando ? 'Cargando…' : 'Escribí parte del nombre o del código…'}
+              opciones={[
+                { value: TODOS, label: `TODOS los clientes especiales (${clientes.length})` },
+                ...clientes.map((c) => ({ value: String(c.id), label: c.nombre, detalle: c.nro_cliente ?? undefined })),
+              ]} />
+            
           </div>
           <div className="grid gap-2">
             <Label htmlFor="mes">Mes a cargar</Label>

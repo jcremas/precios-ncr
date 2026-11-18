@@ -3,11 +3,11 @@ import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { nombreMes, precio } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente, type Modalidad } from '@/lib/tipos'
-import { Input } from '@/components/ui/input'
 import { useNiveles } from '@/lib/niveles'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -21,7 +21,6 @@ export default function Cotizar() {
   const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel_id' | 'nro_cliente' | 'modalidad' | 'cotiza'>[]>([])
   const [id, setId] = useState('')
   const [modalidad, setModalidad] = useState<Modalidad | ''>('')
-  const [buscar, setBuscar] = useState('')
   const [lineas, setLineas] = useState<Linea[]>([])
   const [aviso, setAviso] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
@@ -32,10 +31,7 @@ export default function Cotizar() {
   }, [])
 
   const cliente = clientes.find((c) => String(c.id) === id)
-  const texto = buscar.trim().toUpperCase()
-  const visibles = clientes.filter((c) =>
-    (!modalidad || c.modalidad === modalidad) &&
-    (!texto || c.nombre.toUpperCase().includes(texto) || (c.nro_cliente ?? '').toUpperCase().includes(texto)))
+  const visibles = clientes.filter((c) => !modalidad || c.modalidad === modalidad)
 
   useEffect(() => {
     setLineas([])
@@ -122,15 +118,13 @@ ${lineas.map((l, i) => {
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="buscar">Buscar por nombre o código</Label>
-            <Input id="buscar" value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Ej.: SIETE" />
-          </div>
-          <div className="grid gap-2 md:col-span-2">
-          <Label htmlFor="cli">Cliente</Label>
-          <Select id="cli" value={id} onChange={(e) => setId(e.target.value)}>
-            <option value="">Elegí un cliente ({visibles.length})</option>
-            {visibles.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {nombreModalidad(c.modalidad)}{c.nivel_id != null ? ` ${nombreNivel(c.nivel_id)}` : ''}{c.cotiza ? '' : ' · NO COTIZA'}</option>)}
-          </Select>
+            <Label htmlFor="cli">Cliente (escribí parte del nombre o del código)</Label>
+            <Combobox id="cli" value={id} onChange={setId} placeholder={`Buscar entre ${visibles.length} clientes…`}
+              opciones={visibles.map((c) => ({
+                value: String(c.id),
+                label: c.nombre,
+                detalle: [c.nro_cliente, `${nombreModalidad(c.modalidad)}${c.nivel_id != null ? ` ${nombreNivel(c.nivel_id)}` : ''}`, c.cotiza ? null : 'NO COTIZA'].filter(Boolean).join(' · '),
+              }))} />
           </div>
         </CardContent>
       </Card>
