@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { mensajeError, preciosDeClientes, traerTodo } from '@/lib/datos'
+import { grillasActivas, listasGenerales, mensajeError, preciosDeClientes } from '@/lib/datos'
 import { aInputMes, desdeInputMes, mesActual, mesSiguiente, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { listaVigente } from '@/lib/precios'
 import type { Cliente, ListaGeneral, Origen, PrecioCliente, Sku } from '@/lib/tipos'
@@ -52,14 +52,12 @@ export default function EnvioMensual() {
       const ids = (cli.data ?? []).map((c) => c.id)
       const [sk, gr, pr, li] = await Promise.all([
         supabase.from('skus').select('*'),
-        traerTodo<{ cliente_id: number; sku: number }>((d, h) =>
-          supabase.from('cliente_skus').select('cliente_id, sku').eq('activo', true).in('cliente_id', ids).range(d, h),
-        ),
+        grillasActivas(ids),
         preciosDeClientes(ids),
-        supabase.from('lista_general').select('mes, sku, precio, precio_minimo'),
+        listasGenerales(),
       ])
       if (sk.error) throw sk.error
-      setListas((li.data ?? []) as ListaGeneral[])
+      setListas(li)
       setClientes(cli.data ?? [])
       setSkus(new Map((sk.data as Sku[]).map((s) => [s.sku, s])))
       setGrillas(gr)
@@ -175,7 +173,8 @@ export default function EnvioMensual() {
     setGuardando(false)
     if (error) return setEstado({ tipo: 'error', texto: mensajeError(error) })
     setEstado({ tipo: 'ok', texto: `Se guardaron ${aGuardar.length} precio(s) de ${nombreMes(mesNuevo)}.` })
-    setPrecios(await preciosDeClientes())
+    // Solo los especiales de esta pantalla (no hace falta bajar los genéricos).
+    setPrecios(await preciosDeClientes(clientes.map((c) => c.id)))
   }
 
   return (
