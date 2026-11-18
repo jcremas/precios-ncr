@@ -16,6 +16,9 @@ export interface Sku {
   familia: string | null
   estado: EstadoSku
   admite_descuento: boolean
+  peso: number | null
+  unidades_pallet: number | null
+  color: string | null
 }
 
 export interface Cliente {

@@ -16,7 +16,7 @@ Supabase (Postgres, São Paulo) · React + TypeScript + Vite + Tailwind v4 + sha
 - Un precio por (cliente, SKU, mes), para TODOS los clientes. Las correcciones quedan auditadas en `precios_cliente_cambios`.
 - Modalidad: GENERICO = lista_general − descuento del nivel, recalculado con `publicar_lista(mes)`; ESPECIAL = lista propia (no descuento), se maneja con % y a mano. `cotiza` false = bloqueado (reemplaza NO COTIZA).
 - Lista general: un precio LISTA por SKU/mes + `precio_minimo` (piso). Nivel = round(LISTA × (1 − desc), 1) salvo `skus.admite_descuento = false` (8 SKUs: ELITE, LUCAS, 2 Bitter, 4 Cerveza). Misma fórmula en SQL (`precio_con_descuento`) y en `src/lib/precios.ts`.
-- Esquema en `supabase/migrations/0001_esquema.sql` + `0002_precios_genericos_al_instante.sql` (se corren en orden; 0002 es repetible); `supabase/reset.sql` borra todo para empezar de cero.
+- Esquema en `supabase/migrations/0001_esquema.sql` + `0002_precios_genericos_al_instante.sql` + `0003_datos_sku.sql` (se corren en orden; 0002 y 0003 son repetibles); `supabase/reset.sql` borra todo para empezar de cero.
 - Genérico: al crearlo, cambiarle nivel/modalidad/cotiza o tildarle un SKU, los disparadores guardan sus precios del mes actual (hora Argentina) con `lista_vigente` (función `recalcular_cliente`). Meses anteriores no se tocan.
 - Meses guardados como fecha día 1 (`2026-05-01` = MAY 2026).
 - Nombres de cliente completos (decidido por Javier, 2026-11-17). El código de cliente (`nro_cliente`) es la clave de negocio; el Excel no lo trae y se completa en la app.
@@ -29,7 +29,7 @@ Supabase (Postgres, São Paulo) · React + TypeScript + Vite + Tailwind v4 + sha
 - La columna "Minimo" de LISTA_REFERENCIA tiene valores negativos: NO es el precio piso y no se importa. El piso se carga en Lista general.
 
 ## Funciones
-Hechas: envío mensual de especiales (con lista y mínimo de referencia), lista general (cargar, % sobre anterior, pegar desde Excel, publicar a genéricos), historial y mapa SKU × cliente en la ficha, primera lista de un especial nuevo, cotizador (RPC `cotizar`), ABM de clientes y SKUs, consultas primera tanda (por SKU, ranking, brecha contra lista, ficha, envíos del mes, desactualizados, cobertura) con exportar a CSV para Excel.
+Hechas: envío mensual de especiales (con lista y mínimo de referencia), lista general (cargar, % sobre anterior, pegar desde Excel, publicar a genéricos), historial y mapa SKU × cliente en la ficha, primera lista de un especial nuevo, cotizador (RPC `cotizar`, todos los clientes, con unidades por pallet, copia compacta para correo), SKUs con peso/unidades por pallet/color, ABM de clientes y SKUs, consultas primera tanda (por SKU, ranking, brecha contra lista, ficha, envíos del mes, desactualizados, cobertura) con exportar a CSV para Excel.
 Pendientes: importar los 283 clientes genéricos (falta el listado), consultas segunda tanda (evolución de un SKU, aumento acumulado con inflación, dispersión, por familia, por segmento/nivel, cambios manuales, alertas, simulador), precios de competencia, envío de listas por email, deploy en Vercel.
 Plan aprobado: https://claude.ai/artifact/FTZZLVhNNpURLDSUc1nLSm
 
