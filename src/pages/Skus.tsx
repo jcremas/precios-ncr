@@ -46,15 +46,18 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
   const [pallet, setPallet] = useState(txt(s.unidades_pallet))
   const [peso, setPeso] = useState(txt(s.peso))
   const [color, setColor] = useState(s.color ?? '')
+  const [sinonimos, setSinonimos] = useState(s.sinonimos ?? '')
   const cambio = d.descripcion !== s.descripcion || d.familia !== s.familia || d.estado !== s.estado || d.admite_descuento !== s.admite_descuento
-    || pallet !== txt(s.unidades_pallet) || peso !== txt(s.peso) || color !== (s.color ?? '')
+    || pallet !== txt(s.unidades_pallet) || peso !== txt(s.peso) || color !== (s.color ?? '') || sinonimos !== (s.sinonimos ?? '')
 
   async function guardar() {
     if (!d.descripcion.trim()) return setError('Falta descripción')
     const r = datosSku(pallet, peso, color)
     if (r.error) return setError(r.error)
+    if (sinonimos.trim().length > 300) return setError('Otros nombres: hasta 300 caracteres')
     const { error } = await supabase.from('skus')
-      .update({ descripcion: d.descripcion.trim(), familia: d.familia?.trim() || null, estado: d.estado, admite_descuento: d.admite_descuento, ...r.valores })
+      .update({ descripcion: d.descripcion.trim(), familia: d.familia?.trim() || null, estado: d.estado, admite_descuento: d.admite_descuento, ...r.valores,
+        ...(sinonimos !== (s.sinonimos ?? '') ? { sinonimos: sinonimos.trim() || null } : {}) })
       .eq('sku', s.sku)
     if (error) return setError(mensajeError(error))
     setError(null)
@@ -82,6 +85,9 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
       </TableCell>
       <TableCell>
         <Input className="h-8 w-28" maxLength={10} aria-label={`Color ${s.sku}`} value={color} onChange={(e) => setColor(e.target.value)} />
+      </TableCell>
+      <TableCell>
+        <Input className="h-8 min-w-48" maxLength={300} aria-label={`Otros nombres ${s.sku}`} placeholder="ej. Giuliana, oliva" value={sinonimos} onChange={(e) => setSinonimos(e.target.value)} />
       </TableCell>
       <TableCell>
         {cambio && <Button size="sm" onClick={guardar}>Guardar</Button>}
@@ -135,7 +141,9 @@ export default function Skus() {
       if (!skus.some((s) => s.sku === sku)) { desconocidos.push(partes[0]); continue }
       const r = datosSku(partes[2] ?? '', partes[1] ?? '', partes[3] ?? '')
       if (r.error) { invalidos.push(`${partes[0]} (${r.error})`); continue }
-      const { error } = await supabase.from('skus').update(r.valores!).eq('sku', sku)
+      // 5ª columna opcional: otros nombres (si no viene, no se toca).
+      const extra = partes.length >= 5 ? { sinonimos: partes[4].slice(0, 300) || null } : {}
+      const { error } = await supabase.from('skus').update({ ...r.valores!, ...extra }).eq('sku', sku)
       if (error) return setError(mensajeError(error))
       ok++
     }
@@ -158,7 +166,7 @@ export default function Skus() {
       {verPegar && (
         <Card>
           <CardContent className="grid gap-2 pt-6">
-            <Label htmlFor="pegado">Copiá en Excel las columnas SKU, Peso, Unidades por pallet y Color (en ese orden), y pegalas acá. Una celda vacía borra ese dato.</Label>
+            <Label htmlFor="pegado">Copiá en Excel las columnas SKU, Peso, Unidades por pallet y Color (en ese orden), y pegalas acá. Opcional: una quinta columna con Otros nombres. Una celda vacía borra ese dato.</Label>
             <textarea id="pegado" className="min-h-32 rounded-md border p-2 font-mono text-sm" value={pegado} onChange={(e) => setPegado(e.target.value)} placeholder={'11008938\t480\t1200\tVERDE\n11008939\t520\t1450\tCARAMELO'} />
             <div><Button size="sm" onClick={aplicarPegado} disabled={!pegado.trim()}>Guardar</Button></div>
           </CardContent>
@@ -195,11 +203,12 @@ export default function Skus() {
             <TableHead>Peso</TableHead>
             <TableHead>Unid./pallet</TableHead>
             <TableHead>Color</TableHead>
+            <TableHead title="Cómo lo nombran los clientes en sus pedidos, separado por coma. Lo usa Pegar pedido en Cotizar.">Otros nombres</TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}-${s.admite_descuento}-${s.unidades_pallet}-${s.peso}-${s.color}`} s={s} onGuardado={cargar} />)}
+          {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}-${s.admite_descuento}-${s.unidades_pallet}-${s.peso}-${s.color}-${s.sinonimos}`} s={s} onGuardado={cargar} />)}
         </TableBody>
       </Table>
     </div>

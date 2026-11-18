@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
+import { copiarTabla } from '@/lib/copiar'
 import { nombreMes, precio } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente, type Modalidad } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
+import PegarPedido from '@/components/PegarPedido'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -26,6 +28,7 @@ export default function Cotizar() {
   const [lineas, setLineas] = useState<Linea[]>([])
   const [aviso, setAviso] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
+  const [verPedido, setVerPedido] = useState(false)
 
   useEffect(() => {
     supabase.from('clientes').select('id, nombre, nivel_id, nro_cliente, modalidad, cotiza').eq('activo', true).order('nombre')
@@ -80,36 +83,14 @@ export default function Cotizar() {
   }
 
   async function copiar() {
-    const titulo = `Lista de precios - ${cliente?.nombre ?? ''}`
     const pallet = (l: Linea) => (l.pallet ? fmtUnidades.format(l.pallet) : '')
-    // Texto de respaldo (programas que no aceptan formato): una línea por SKU.
-    const texto = [
-      titulo,
-      '',
-      ...lineas.map((l) => [l.sku, l.descripcion, precio(Number(l.precio)), l.pallet ? `${pallet(l)} u/pallet` : null]
-        .filter(Boolean).join(' · ')),
-    ].join('\n')
-    // Tabla compacta con estilos en línea, que Outlook respeta al pegar.
-    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    const celda = 'padding:3px 8px;border:1px solid #d0d7e2;'
-    const cab = `${celda}background:#1f3a5f;color:#ffffff;font-weight:bold;`
-    const html = `<div style="font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#222222;">
-<p style="margin:0 0 6px 0;font-size:11pt;font-weight:bold;color:#1f3a5f;">${esc(titulo)}</p>
-<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:10pt;">
-<tr><th style="${cab}text-align:left;">SKU</th><th style="${cab}text-align:left;">Producto</th><th style="${cab}text-align:right;">Precio</th><th style="${cab}text-align:right;">Unid./pallet</th></tr>
-${lineas.map((l, i) => {
-  const fondo = i % 2 ? 'background:#f3f6fa;' : 'background:#ffffff;'
-  return `<tr><td style="${celda}${fondo}">${l.sku}</td><td style="${celda}${fondo}">${esc(l.descripcion)}</td><td style="${celda}${fondo}text-align:right;white-space:nowrap;">${esc(precio(Number(l.precio)))}</td><td style="${celda}${fondo}text-align:right;">${pallet(l)}</td></tr>`
-}).join('\n')}
-</table></div>`
-    try {
-      await navigator.clipboard.write([new ClipboardItem({
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([texto], { type: 'text/plain' }),
-      })])
-    } catch {
-      await navigator.clipboard.writeText(texto)
-    }
+    await copiarTabla(
+      `Lista de precios - ${cliente?.nombre ?? ''}`,
+      [{ titulo: 'SKU' }, { titulo: 'Producto' }, { titulo: 'Precio', derecha: true }, { titulo: 'Unid./pallet', derecha: true }],
+      lineas.map((l) => [String(l.sku), l.descripcion, precio(Number(l.precio)), pallet(l)]),
+      // Texto de respaldo (programas que no aceptan formato): una línea por SKU.
+      ([sku, desc, p, u]) => [sku, desc, p, u ? `${u} u/pallet` : null].filter(Boolean).join(' · '),
+    )
     setCopiado(true)
   }
 
@@ -154,8 +135,10 @@ ${lineas.map((l, i) => {
           <div className="flex items-center gap-3">
             <Badge>{cliente && nombreModalidad(cliente.modalidad)}{cliente?.nivel_id != null ? ` · ${nombreNivel(cliente.nivel_id)}` : ''}</Badge>
             <span className="text-sm text-muted-foreground">Precios de {nombreMes(lineas[0].mes)} · {lineas.length} SKU(s)</span>
-            <Button className="ml-auto" variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓ Pegalo en el correo' : 'Copiar para enviar'}</Button>
+            <Button className="ml-auto" variant={verPedido ? 'secondary' : 'outline'} onClick={() => setVerPedido(!verPedido)}>Pegar pedido</Button>
+            <Button variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓ Pegalo en el correo' : 'Copiar para enviar'}</Button>
           </div>
+          {verPedido && cliente && <PegarPedido clienteNombre={cliente.nombre} mes={mes} precios={lineas} />}
           <Table>
             <TableHeader>
               <TableRow>
