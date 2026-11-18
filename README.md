@@ -13,6 +13,7 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 | `supabase/migrations/0002_precios_genericos_al_instante.sql` | Precios de los genéricos al instante (al crearlos o cambiarles el nivel). Se corre después de 0001. |
 | `supabase/migrations/0003_datos_sku.sql` | Peso, unidades por pallet y color de cada SKU. |
 | `supabase/migrations/0004_niveles_editables.sql` | Niveles de descuento con número fijo (id), editables (nombre, %, orden). Clientes enlazados por `nivel_id`. |
+| `supabase/migrations/0005_cotizar_ultimo_mes.sql` | Cotizar muestra solo los precios del mes más nuevo, sin mezclar meses. |
 | `supabase/reset.sql` | Borra todo lo de la app para empezar de cero. |
 | `migracion/importar_excel.py` | Lee el Excel y genera el SQL con los datos iniciales. El Excel y el SQL generado **nunca** se suben. |
 | `.env.example` | Modelo del archivo de claves. El `.env` real no se sube. |
@@ -30,6 +31,7 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 3. **New query** otra vez con `supabase/migrations/0002_precios_genericos_al_instante.sql` → **Run**. Hace que un cliente genérico tenga sus precios apenas se crea o se le cambia el nivel. Se puede correr más de una vez sin problema.
 4. **New query** con `supabase/migrations/0003_datos_sku.sql` → **Run**. Agrega a los SKUs peso, unidades por pallet y color.
 5. **New query** con `supabase/migrations/0004_niveles_editables.sql` → **Run**. Permite editar los niveles de descuento desde la app: cada nivel pasa a tener un número fijo (id) y los clientes quedan enlazados a ese número, así se puede cambiar el nombre sin perder nada. Conserva el nivel de cada cliente. Después de este, no vuelvas a correr el 0002.
+6. **New query** con `supabase/migrations/0005_cotizar_ultimo_mes.sql` → **Run**. El cotizador pasa a mostrar solo los precios del mes más nuevo de cada cliente (o de la última lista general, para genéricos). Si un SKU no tiene precio ese mes, no se cotiza.
 
 ### 3. Cerrar el registro público y crear tu usuario
 1. **Authentication → Sign In / Providers → Email**: dejá Email activado y **desactivá "Allow new users to sign up"**. Así nadie se puede registrar solo.
