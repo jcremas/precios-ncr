@@ -18,6 +18,8 @@ export interface Sku {
   peso: number | null
   unidades_pallet: number | null
   color: string | null
+  /** Otros nombres con que lo piden los clientes, separados por coma (0009). */
+  sinonimos?: string | null
 }
 
 export interface Cliente {
