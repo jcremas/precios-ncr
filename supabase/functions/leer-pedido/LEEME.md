@@ -37,3 +37,6 @@ Supabase → **Edge Functions** → `leer-pedido` → pestaña **Code** → borr
 
 ## Si dice que Gemini está saturado (error 503)
 Es del lado de Google (pasa en el plan gratis en horas pico). La función ya reintenta sola y prueba otros modelos gratuitos (flash, flash-lite). Si aun así falla, esperar unos minutos.
+
+## Ver qué pasó cuando falla (Logs)
+Supabase → **Edge Functions** → `leer-pedido` → pestaña **Logs** (o **Invocations** para ver el código de cada llamada). Ahí aparece el error real de cada intento, con la hora.
