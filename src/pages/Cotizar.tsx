@@ -71,14 +71,36 @@ export default function Cotizar() {
   }
 
   async function copiar() {
-    // Texto compacto para pegar en el cuerpo del correo: una línea por SKU.
+    const titulo = `Lista de precios - ${cliente?.nombre ?? ''}`
+    const pallet = (l: Linea) => (l.pallet ? fmtUnidades.format(l.pallet) : '')
+    // Texto de respaldo (programas que no aceptan formato): una línea por SKU.
     const texto = [
-      `Lista de precios - ${cliente?.nombre}`,
+      titulo,
       '',
-      ...lineas.map((l) => [l.sku, l.descripcion, precio(Number(l.precio)), l.pallet ? `${fmtUnidades.format(l.pallet)} u/pallet` : null]
+      ...lineas.map((l) => [l.sku, l.descripcion, precio(Number(l.precio)), l.pallet ? `${pallet(l)} u/pallet` : null]
         .filter(Boolean).join(' · ')),
     ].join('\n')
-    await navigator.clipboard.writeText(texto)
+    // Tabla compacta con estilos en línea, que Outlook respeta al pegar.
+    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const celda = 'padding:3px 8px;border:1px solid #d0d7e2;'
+    const cab = `${celda}background:#1f3a5f;color:#ffffff;font-weight:bold;`
+    const html = `<div style="font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#222222;">
+<p style="margin:0 0 6px 0;font-size:11pt;font-weight:bold;color:#1f3a5f;">${esc(titulo)}</p>
+<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:10pt;">
+<tr><th style="${cab}text-align:left;">SKU</th><th style="${cab}text-align:left;">Producto</th><th style="${cab}text-align:right;">Precio</th><th style="${cab}text-align:right;">Unid./pallet</th></tr>
+${lineas.map((l, i) => {
+  const fondo = i % 2 ? 'background:#f3f6fa;' : 'background:#ffffff;'
+  return `<tr><td style="${celda}${fondo}">${l.sku}</td><td style="${celda}${fondo}">${esc(l.descripcion)}</td><td style="${celda}${fondo}text-align:right;white-space:nowrap;">${esc(precio(Number(l.precio)))}</td><td style="${celda}${fondo}text-align:right;">${pallet(l)}</td></tr>`
+}).join('\n')}
+</table></div>`
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([texto], { type: 'text/plain' }),
+      })])
+    } catch {
+      await navigator.clipboard.writeText(texto)
+    }
     setCopiado(true)
   }
 
@@ -118,7 +140,7 @@ export default function Cotizar() {
           <div className="flex items-center gap-3">
             <Badge>{cliente && nombreModalidad(cliente.modalidad)}{cliente?.nivel ? ` · ${cliente.nivel}` : ''}</Badge>
             <span className="text-sm text-muted-foreground">{lineas.length} SKU(s)</span>
-            <Button className="ml-auto" variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓' : 'Copiar para enviar'}</Button>
+            <Button className="ml-auto" variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓ Pegalo en el correo' : 'Copiar para enviar'}</Button>
           </div>
           <Table>
             <TableHeader>
