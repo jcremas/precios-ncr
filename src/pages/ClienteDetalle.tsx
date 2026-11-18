@@ -217,8 +217,9 @@ export default function ClienteDetalle() {
           ) : (
             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
               {([
-                ['Código', cliente.nro_cliente], ['Segmento', cliente.segmento], ['Condición de pago', cliente.condicion_pago],
-                ['Contacto', cliente.contacto], ['Email', cliente.email], ['Observaciones', cliente.observaciones],
+                ['Código', cliente.nro_cliente], ['Segmento', cliente.segmento], ['Marca principal', cliente.marca_principal],
+                ['Nombre de contacto', cliente.contacto], ['Email de contacto', cliente.email], ['Condiciones de pago', cliente.condicion_pago],
+                ['Empaque consignado', cliente.empaque_consignado ? 'Sí' : 'No'], ['Observaciones', cliente.observaciones],
               ] as const).map(([k, v]) => (
                 <div key={k}><dt className="text-muted-foreground">{k}</dt><dd>{v || '—'}</dd></div>
               ))}
