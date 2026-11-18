@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 /** Precio del cliente para cada SKU en el mes elegido (lo que muestra Cotizar). */
 export interface PrecioCotizado { sku: number; descripcion: string; precio: number }
 
-interface SkuCat { sku: number; descripcion: string; color: string | null; sinonimos?: string | null; unidades_pallet: number | null; estado: string }
+interface SkuCat { sku: number; descripcion: string; familia: string | null; color: string | null; sinonimos?: string | null; unidades_pallet: number | null; estado: string }
 
 
 interface Fila {
@@ -25,6 +25,7 @@ interface Fila {
   botellas: number | null
   confianza: 'alta' | 'media' | 'baja'
   nota: string | null
+  alternativas?: number[]
 }
 
 const fmtUnidades = new Intl.NumberFormat('es-AR')
@@ -71,11 +72,11 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
   const [resumen, setResumen] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.from('skus').select('sku, descripcion, color, sinonimos, unidades_pallet, estado').order('descripcion')
+    supabase.from('skus').select('sku, descripcion, familia, color, sinonimos, unidades_pallet, estado').order('descripcion')
       .then(async ({ data, error }) => {
         // Si la base todavía no tiene "Otros nombres" (0009), se lee sin ellos.
         if (!error) return setCatalogo((data ?? []) as SkuCat[])
-        const sin = await supabase.from('skus').select('sku, descripcion, color, unidades_pallet, estado').order('descripcion')
+        const sin = await supabase.from('skus').select('sku, descripcion, familia, color, unidades_pallet, estado').order('descripcion')
         setCatalogo((sin.data ?? []) as SkuCat[])
       })
   }, [])
@@ -95,35 +96,40 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
     const reglas = leerPedidoPorReglas(texto, catalogo)
     const msReglas = performance.now() - t0
     setFilas(aFilas(reglas))
-    const dudosas = reglas.filter((f) => f.sku == null)
+    // A la IA van las líneas sin reconocer o muy dudosas.
+    const dudosas = reglas.filter((f) => f.sku == null || f.confianza === 'baja')
     if (!reglas.length) return setError('No se encontraron productos en el texto.')
     if (!dudosas.length) return setResumen(`Leído al instante (${fmtMs(msReglas)}), sin usar IA.`)
 
     setLeyendo(true)
     const t1 = performance.now()
-    const { data, error } = await supabase.functions.invoke('leer-pedido', { body: { texto: dudosas.map((f) => f.texto).join('\n') } })
+    const { data, error } = await supabase.functions.invoke('leer-pedido', { body: { texto: dudosas.map((f) => f.texto).join('\n') }, timeout: 20000 })
     const msIa = performance.now() - t1
     setLeyendo(false)
     if (error) {
-      setResumen(`${reglas.length - dudosas.length} línea(s) leídas al instante. ${dudosas.length} sin reconocer: elegí el SKU a mano.`)
-      return setError(`No se pudo consultar a la IA: ${await explicarError(error)}`)
+      setResumen(`${reglas.length - dudosas.length} línea(s) leídas al instante. ${dudosas.length} con dudas: elegí el SKU (te dejo sugeridos arriba de la lista).`)
+      const motivo = /abort|timeout|timed out/i.test(mensajeError(error)) ? 'no respondió a tiempo (20 s).' : await explicarError(error)
+      return setError(`La IA ${motivo.startsWith('no respondió') ? '' : 'falló: '}${motivo}`)
     }
     const deIa = (data?.filas ?? []) as FilaLeida[]
     const clave = (t: string) => normalizar(t)
     const usadas = new Set<number>()
     const final = reglas.map((f) => {
-      if (f.sku != null) return f
+      if (f.sku != null && f.confianza !== 'baja') return f
       const k = clave(f.texto)
       const j = deIa.findIndex((x, n) => !usadas.has(n) && (clave(x.texto) === k || k.includes(clave(x.texto)) || clave(x.texto).includes(k)))
       if (j < 0 || deIa[j].sku == null) return f
       usadas.add(j)
       const x = deIa[j]
-      return { ...f, sku: x.sku, pallets: f.pallets ?? x.pallets, botellas: f.botellas ?? x.botellas,
-        confianza: x.confianza, nota: `Lo reconoció la IA${x.nota ? `: ${x.nota}` : ''}. Revisalo.` } as FilaLeida
+      // Sugeridos: los de la IA y los de las reglas, sin repetir.
+      const alternativas = [...new Set([...(x.alternativas ?? []), ...(f.sku != null && f.sku !== x.sku ? [f.sku] : []), ...(f.alternativas ?? [])])]
+        .filter((n) => n !== x.sku).slice(0, 4)
+      return { ...f, sku: x.sku, pallets: f.pallets ?? x.pallets, botellas: f.botellas ?? x.botellas, alternativas,
+        confianza: x.confianza, nota: `Lo propuso la IA${x.nota ? `: ${x.nota}` : ''}. Revisalo.` } as FilaLeida
     })
     setFilas(aFilas(final))
-    const resueltas = final.filter((f, n) => reglas[n].sku == null && f.sku != null).length
-    setResumen(`${reglas.length - dudosas.length} línea(s) leídas al instante. ${dudosas.length} consultadas a la IA (${fmtMs(msIa)}${data?.modelo ? `, ${data.modelo}` : ''}): reconoció ${resueltas}.`)
+    const resueltas = final.filter((f, n) => f !== reglas[n]).length
+    setResumen(`${reglas.length - dudosas.length} línea(s) leídas al instante. ${dudosas.length} consultada(s) a la IA (${fmtMs(msIa)}${data?.modelo ? `, ${data.modelo}` : ''}): propuso ${resueltas}.`)
   }
 
   const cambiar = (i: number, cambio: Partial<Fila>) => {
@@ -217,15 +223,35 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
                       <TableCell className="w-72 max-w-xs whitespace-normal align-top text-xs">
                         {f.texto}
                         {d.dudas.length > 0 && <ul className="mt-1 list-disc pl-4 text-amber-900">{d.dudas.map((x) => <li key={x}>{x}</li>)}</ul>}
+                        {d.dudas.length > 0 && (f.alternativas ?? []).length > 0 && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="text-muted-foreground">¿O es…?</span>
+                            {(f.alternativas ?? []).map((n) => (
+                              <button key={n} type="button" className="rounded border bg-background px-1.5 py-0.5 hover:bg-accent"
+                                onClick={() => cambiar(i, { sku: n, confianza: 'alta', nota: null, alternativas: [...(f.sku != null ? [f.sku] : []), ...(f.alternativas ?? []).filter((x) => x !== n)] })}>
+                                {porSku.get(n)?.descripcion ?? n}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="align-top">
                         <Select className="h-8 min-w-64" aria-label={`SKU de la fila ${i + 1}`} value={f.sku ?? ''}
                           onChange={(e) => cambiar(i, { sku: e.target.value ? Number(e.target.value) : null, confianza: 'alta', nota: null })}>
                           <option value="">— Elegir SKU —</option>
                           {f.sku != null && !activos.some((s) => s.sku === f.sku) && <option value={f.sku}>{f.sku} · {d.s?.descripcion ?? '?'}</option>}
-                          {activos.map((s) => (
-                            <option key={s.sku} value={s.sku}>{s.sku} · {s.descripcion}{precioDe.has(s.sku) ? '' : ' (sin precio)'}</option>
-                          ))}
+                          {(f.alternativas ?? []).length > 0 && (
+                            <optgroup label="Sugeridos">
+                              {[...(f.sku != null ? [f.sku] : []), ...(f.alternativas ?? [])].map((n) => (
+                                <option key={`s${n}`} value={n}>{n} · {porSku.get(n)?.descripcion ?? '?'}{precioDe.has(n) ? '' : ' (sin precio)'}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          <optgroup label="Todos los SKUs">
+                            {activos.map((s) => (
+                              <option key={s.sku} value={s.sku}>{s.sku} · {s.descripcion}{precioDe.has(s.sku) ? '' : ' (sin precio)'}</option>
+                            ))}
+                          </optgroup>
                         </Select>
                       </TableCell>
                       <TableCell className="text-right align-top tabular-nums">{d.p != null ? precio(d.p) : '—'}</TableCell>

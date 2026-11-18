@@ -27,7 +27,9 @@ const MAX_TEXTO = 8000
 // Primero los livianos (flash-lite): responden más rápido y alcanzan para leer pedidos.
 const RESPALDO = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-2.5-flash']
 /** Esperas entre reintentos con el mismo modelo (milisegundos). */
-const ESPERAS = [1500, 4000]
+const ESPERAS = [1000, 2500]
+/** Tope total para consultar a Gemini: después de esto se avisa y se sigue sin IA. */
+const TOPE_MS = 15000
 
 interface SkuCatalogo {
   sku: number
@@ -45,6 +47,7 @@ interface FilaIA {
   botellas: number | null
   confianza: 'alta' | 'media' | 'baja'
   nota: string | null
+  alternativas?: number[]
 }
 
 function responder(cuerpo: unknown, estado = 200) {
@@ -65,8 +68,9 @@ const ESQUEMA = {
           botellas: { type: 'INTEGER', nullable: true, description: 'Cantidad de botellas/unidades si el pedido la dice' },
           confianza: { type: 'STRING', enum: ['alta', 'media', 'baja'] },
           nota: { type: 'STRING', nullable: true, description: 'Breve, en español: por qué hay duda o qué alternativa hay' },
+          alternativas: { type: 'ARRAY', items: { type: 'INTEGER' }, description: 'Hasta 3 SKUs del catálogo que también podrían ser, del más al menos probable' },
         },
-        required: ['texto', 'sku', 'pallets', 'botellas', 'confianza', 'nota'],
+        required: ['texto', 'sku', 'pallets', 'botellas', 'confianza', 'nota', 'alternativas'],
       },
     },
   },
@@ -77,7 +81,9 @@ const INSTRUCCIONES = `Sos un asistente de ventas de una fábrica de envases de 
 Te paso el CATÁLOGO de SKUs y un PEDIDO escrito por un cliente. Devolvé una fila por cada producto pedido.
 Reglas:
 - Elegí el SKU del catálogo que corresponde por modelo/nombre, capacidad (ml o cc), color y tipo de boca (corcho, tapa rosca, etc.). Usá también los "otros nombres" de cada SKU.
-- Si ningún SKU coincide con seguridad (por ejemplo, falta el color o hay dos parecidos), poné sku null o el más probable con confianza "baja", y explicá en "nota" la duda.
+- Equivalencias de la fábrica: verde = oliva; blanca/flint/transparente = blanco; liviana = Eco; tapón = corcho = boca corcho; tapa rosca = rosca; ámbar = caramelo; bordelesa = bordalesa = burdeos. Puede faltar la capacidad (casi todo es 750).
+- Siempre proponé el SKU más probable en "sku" (aunque dudes; en ese caso confianza "baja" y explicá la duda en "nota"). Usá null solo si el producto claramente no está en el catálogo.
+- En "alternativas" poné hasta 3 SKUs que también podrían ser (vacío si no hay dudas).
 - "pallets": la cantidad de pallets del pedido. Si solo dice botellas/unidades y el SKU tiene unidades por pallet, calculá pallets = botellas / unidades por pallet.
 - "botellas": solo si el pedido lo dice; los números usan punto de miles (3.402 = 3402).
 - Ignorá saludos, firmas y líneas que no sean productos.
@@ -136,8 +142,10 @@ Deno.serve(async (req) => {
   let ultimoDetalle = ''
   let saturado = false
   let sinCupo = false
+  const inicio = Date.now()
   buscar: for (const m of modelos) {
     for (let intento = 0; intento < ESPERAS.length + 1; intento++) {
+      if (Date.now() - inicio > TOPE_MS) break buscar
       if (intento > 0) await new Promise((r) => setTimeout(r, ESPERAS[intento - 1]))
       let resp: Response
       try {
@@ -190,6 +198,7 @@ Deno.serve(async (req) => {
       pallets: f.pallets != null && Number.isFinite(Number(f.pallets)) ? Number(f.pallets) : null,
       botellas: f.botellas != null && Number.isFinite(Number(f.botellas)) ? Math.round(Number(f.botellas)) : null,
       confianza: valido ? (['alta', 'media', 'baja'].includes(f.confianza) ? f.confianza : 'baja') : 'baja',
+      alternativas: (Array.isArray(f.alternativas) ? f.alternativas : []).map(Number).filter((n) => existentes.has(n) && n !== Number(f.sku)).slice(0, 3),
       nota: f.sku != null && !valido ? `La IA propuso un SKU que no existe (${f.sku}).` : (f.nota || null),
     }
   })
