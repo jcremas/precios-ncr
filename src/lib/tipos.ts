@@ -28,6 +28,8 @@ export interface Cliente {
   contacto: string | null
   email: string | null
   condicion_pago: string | null
+  empaque_consignado: boolean
+  marca_principal: string | null
   modalidad: Modalidad
   nivel_id: number | null
   cotiza: boolean

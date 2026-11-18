@@ -69,9 +69,14 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
         <Label htmlFor="cotiza">Se le cotiza</Label>
       </div>
       {campo('segmento', 'Segmento')}
-      {campo('condicion_pago', 'Condición de pago')}
-      {campo('contacto', 'Contacto')}
-      {campo('email', 'Email', { type: 'email' })}
+      {campo('marca_principal', 'Marca principal')}
+      {campo('condicion_pago', 'Condiciones de pago (hasta 30 caracteres)', { maxLength: 30 })}
+      {campo('contacto', 'Nombre de contacto')}
+      {campo('email', 'Email de contacto', { type: 'email' })}
+      <div className="flex items-center gap-2 pt-6">
+        <input id="empaque_consignado" type="checkbox" checked={d.empaque_consignado} onChange={(e) => setD({ ...d, empaque_consignado: e.target.checked })} />
+        <Label htmlFor="empaque_consignado">Empaque consignado</Label>
+      </div>
       <div className="md:col-span-2">{campo('observaciones', 'Observaciones')}</div>
       {error && <p className="text-sm text-destructive md:col-span-3">{error}</p>}
       <div className="flex gap-2 md:col-span-3">
