@@ -30,7 +30,7 @@ Supabase (Postgres, São Paulo) · React + TypeScript + Vite + Tailwind v4 + sha
 - La columna "Minimo" de LISTA_REFERENCIA tiene valores negativos: NO es el precio piso y no se importa. El piso se carga en Lista general.
 
 ## Funciones
-Hechas: envío mensual de especiales (con lista y mínimo de referencia), lista general (cargar, % sobre anterior, pegar desde Excel, publicar a genéricos), historial y mapa SKU × cliente en la ficha, primera lista de un especial nuevo, cotizador (RPC `cotizar`, todos los clientes, con unidades por pallet, copia compacta para correo), SKUs con peso/unidades por pallet/color, ABM de clientes y SKUs, consultas primera tanda (por SKU, ranking, brecha contra lista, ficha, envíos del mes, desactualizados, cobertura) con exportar a CSV para Excel.
+Hechas: ajuste mensual de especiales (menú "Ajuste mensual", antes "Envío mensual"; ruta /ajuste) (con lista y mínimo de referencia), lista general (cargar, % sobre anterior, pegar desde Excel, publicar a genéricos), historial y mapa SKU × cliente en la ficha, primera lista de un especial nuevo, cotizador (RPC `cotizar`, todos los clientes, con unidades por pallet, copia compacta para correo), SKUs con peso/unidades por pallet/color, ABM de clientes y SKUs, consultas primera tanda (por SKU, ranking, brecha contra lista, ficha, ajustes del mes, desactualizados, cobertura) con exportar a CSV para Excel.
 Pendientes: importar los 283 clientes genéricos (falta el listado), consultas segunda tanda (evolución de un SKU, aumento acumulado con inflación, dispersión, por familia, por segmento/nivel, cambios manuales, alertas, simulador), precios de competencia, envío de listas por email, deploy en Vercel.
 Plan aprobado: https://claude.ai/artifact/FTZZLVhNNpURLDSUc1nLSm
 

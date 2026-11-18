@@ -54,7 +54,7 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
         <p className="text-xs text-muted-foreground">
           {d.modalidad === 'GENERICO'
             ? 'Paga la lista general menos el descuento de su nivel. Sus precios se guardan al crearlo, al cambiarle el nivel y al publicar cada lista.'
-            : 'Tiene su lista de precios propia. Se maneja desde Envío mensual.'}
+            : 'Tiene su lista de precios propia. Se maneja desde Ajuste mensual.'}
         </p>
       </div>
       <div className="grid gap-2">
