@@ -34,6 +34,8 @@ drop function if exists public.recalcular_sku_cliente_trg() cascade;
 drop function if exists public.recalcular_cliente(bigint, bigint) cascade;
 drop function if exists public.mes_actual() cascade;
 drop function if exists public.cotizar(bigint) cascade;
+drop function if exists public.cotizar(bigint, date) cascade;
+drop function if exists public.meses_cotizables(bigint) cascade;
 drop function if exists public.cotizar_cliente(bigint) cascade;
 drop function if exists public.aplicar_aumento(bigint, date, numeric) cascade;
 drop function if exists public.publicar_lista(date) cascade;
