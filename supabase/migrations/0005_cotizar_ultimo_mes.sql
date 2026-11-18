@@ -8,6 +8,7 @@
 --     el descuento de su nivel. Si todavía no hay lista general, sus
 --     precios guardados del último mes.
 -- Se puede correr más de una vez. Requiere 0004.
+-- ⚠️ Reemplazado por 0007 (cotizar por mes): no correr este después del 0007.
 -- =====================================================================
 
 create or replace function public.cotizar(p_cliente_id bigint)
