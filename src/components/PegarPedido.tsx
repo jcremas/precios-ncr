@@ -28,6 +28,30 @@ interface Fila {
 const fmtUnidades = new Intl.NumberFormat('es-AR')
 const fmtPallets = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 
+/** Traduce el error de la función a un mensaje claro, con el motivo real. */
+async function explicarError(error: unknown): Promise<string> {
+  const resp = (error as { context?: unknown }).context
+  if (!(resp instanceof Response)) {
+    // Sin respuesta: no se pudo llegar a la función (internet, nombre mal escrito o no creada).
+    return `No se pudo llamar a la función "leer-pedido" (${mensajeError(error)}). Revisá la conexión y que la función exista en Supabase con ese nombre.`
+  }
+  const estado = resp.status
+  let crudo = ''
+  try { crudo = await resp.text() } catch { /* sin cuerpo */ }
+  let cuerpo: Record<string, unknown> = {}
+  try { cuerpo = JSON.parse(crudo) } catch { /* no es JSON */ }
+  const codigo = String(cuerpo.code ?? '')
+  // Mensajes de nuestra función (vienen en "error").
+  if (typeof cuerpo.error === 'string') return `${cuerpo.error} (código ${estado})`
+  // Mensajes de Supabase antes de llegar a nuestro código.
+  if (estado === 404) return 'No se encontró la función "leer-pedido" en Supabase (código 404). Revisá que esté creada con ese nombre exacto.'
+  if (estado === 401) return 'Supabase no aceptó tu sesión (código 401). Salí de la app y volvé a entrar.'
+  if (codigo === 'BOOT_ERROR' || /boot/i.test(crudo)) return 'La función "leer-pedido" no arranca: el código quedó mal pegado. Volvé a pegarlo completo en Supabase y tocá Deploy (código ' + estado + ').'
+  if (codigo === 'WORKER_LIMIT' || estado === 546 || estado === 504) return `La función tardó demasiado o se quedó sin recursos (código ${estado}). Probá de nuevo en unos minutos.`
+  const detalle = String(cuerpo.message ?? cuerpo.msg ?? crudo).slice(0, 300)
+  return `Error ${estado} al leer el pedido${detalle ? `: ${detalle}` : ''}. Mirá los Logs de "leer-pedido" en Supabase.`
+}
+
 /** '3' / '2,5' / '2.5' -> número; vacío o inválido -> null. */
 function aPallets(t: string): number | null {
   const n = Number(t.trim().replace(',', '.'))
@@ -56,16 +80,7 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
     setCopiado(false)
     const { data, error } = await supabase.functions.invoke('leer-pedido', { body: { texto } })
     setLeyendo(false)
-    if (error) {
-      // La función devuelve el motivo en { error }; si no se puede leer, se muestra el genérico.
-      let motivo = mensajeError(error)
-      try {
-        const cuerpo = await (error as { context?: Response }).context?.json()
-        if (cuerpo?.error) motivo = cuerpo.error
-      } catch { /* sin detalle */ }
-      if (/Failed to send|not found|404/i.test(motivo)) motivo = 'No se encontró la función "leer-pedido" en Supabase. Hay que crearla (ver instrucciones del PR).'
-      return setError(motivo)
-    }
+    if (error) return setError(await explicarError(error))
     const recibidas = ((data?.filas ?? []) as (Omit<Fila, 'pallets'> & { pallets: number | null })[])
     if (!recibidas.length) return setError('La IA no encontró productos en el texto.')
     setFilas(recibidas.map((f) => ({ ...f, pallets: f.pallets != null ? String(f.pallets).replace('.', ',') : '' })))
@@ -124,7 +139,7 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
             onChange={(e) => setTexto(e.target.value)}
             placeholder={'3 pallets botella Burdeos Cónica Baja 750 – Verde – Boca corcho /// 3.402 botellas\n4 pallets botella Burdeos Giuliana 750 – Verde – Boca Corcho /// 4.872 botellas'} />
           <div className="flex items-center gap-2">
-            <Button onClick={leer} disabled={!texto.trim() || leyendo}>{leyendo ? 'Leyendo…' : 'Leer pedido con IA'}</Button>
+            <Button onClick={leer} disabled={!texto.trim() || leyendo}>{leyendo ? 'Leyendo… (puede tardar unos segundos)' : 'Leer pedido con IA'}</Button>
             {filas.length > 0 && <Button variant="ghost" onClick={() => { setFilas([]); setCopiado(false) }}>Limpiar resultado</Button>}
           </div>
         </div>

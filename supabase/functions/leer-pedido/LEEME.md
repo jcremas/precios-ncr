@@ -31,3 +31,12 @@ Cotizar → elegir cliente y mes → **Pegar pedido** → pegar el texto → **L
 Las filas en amarillo hay que revisarlas (SKU dudoso, sin precio ese mes, o botellas que no cierran con los pallets). Se puede cambiar el SKU, los pallets o quitar filas, y después **Copiar cotización** para pegar en el correo.
 
 Para que acierte más: en **SKUs**, columna **Otros nombres**, cargar cómo nombran los clientes cada producto (ej. `Giuliana, Burdeos, boca corcho`).
+
+## Actualizar la función (cuando cambia el código)
+Supabase → **Edge Functions** → `leer-pedido` → pestaña **Code** → borrar todo, pegar el `index.ts` nuevo → **Deploy updates**. La clave no se toca.
+
+## Si dice que Gemini está saturado (error 503)
+Es del lado de Google (pasa en el plan gratis en horas pico). La función ya reintenta sola y prueba otros modelos gratuitos (flash, flash-lite). Si aun así falla, esperar unos minutos.
+
+## Ver qué pasó cuando falla (Logs)
+Supabase → **Edge Functions** → `leer-pedido` → pestaña **Logs** (o **Invocations** para ver el código de cada llamada). Ahí aparece el error real de cada intento, con la hora.
