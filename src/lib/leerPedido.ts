@@ -119,7 +119,7 @@ function preparar(catalogo: SkuParaLeer[]): Clave[] {
   })
 }
 
-/** Puntaje 0..1: cuánto de la línea explica el SKU y cuánto del SKU aparece en la línea. */
+/** Puntaje (0..1, o 1..2 si coincide un "Otro nombre"): cuánto de la línea explica el SKU y cuánto del SKU aparece en la línea. */
 function puntaje(c: Clave, linea: { attrs: Record<string, string>; palabras: Set<string>; plana: string }) {
   let enComun = 0
   let delSku = 0
@@ -142,15 +142,23 @@ function puntaje(c: Clave, linea: { attrs: Record<string, string>; palabras: Set
       else contradice++
     }
   }
+  // Otros nombres cargados por Javier: mandan sobre la descripción. Si la línea
+  // tiene uno, ese SKU gana a cualquiera que no lo tenga (puntaje 1 a 2) y entre
+  // los que lo tienen deciden color, boca, línea y capacidad. Una contradicción
+  // (pidió rosca y es tapón) igual lo baja.
+  const sinonimo = c.frases.some((f) => ` ${linea.plana} `.includes(` ${f} `))
+  if (sinonimo) {
+    const pa = deLinea ? enComun / deLinea : 1
+    const ra = delSku ? enComun / delSku : 1
+    const fa = pa + ra ? (2 * pa * ra) / (pa + ra) : 0
+    return (1 + fa) * (contradice ? 0.35 ** contradice : 1)
+  }
   for (const p of c.palabras) {
     delSku += 1.5 // modelo/familia (Cónica, Baja, Nobile…) es lo que más distingue
     if (linea.palabras.has(p)) enComun += 1.5
   }
   for (const p of linea.palabras) if (!c.palabras.includes(p)) deLinea += 1.5
   deLinea += [...linea.palabras].filter((p) => c.palabras.includes(p)).length * 1.5
-  // Otros nombres cargados por Javier: cuentan mucho.
-  const sinonimo = c.frases.some((f) => ` ${linea.plana} `.includes(` ${f} `))
-  if (sinonimo) { enComun += 3; delSku += 3; deLinea += 3 }
   if (!enComun) return 0
   const p = enComun / deLinea
   const r = enComun / delSku
