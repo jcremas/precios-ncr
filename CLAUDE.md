@@ -16,8 +16,9 @@ Supabase (Postgres, São Paulo) · React + TypeScript + Vite + Tailwind v4 + sha
 - Un precio por (cliente, SKU, mes), para TODOS los clientes. Las correcciones quedan auditadas en `precios_cliente_cambios`.
 - Modalidad: GENERICO = lista_general − descuento del nivel, recalculado con `publicar_lista(mes)`; ESPECIAL = lista propia (no descuento), se maneja con % y a mano. `cotiza` false = bloqueado (reemplaza NO COTIZA).
 - Lista general: un precio LISTA por SKU/mes + `precio_minimo` (piso). Nivel = round(LISTA × (1 − desc), 1) salvo `skus.admite_descuento = false` (8 SKUs: ELITE, LUCAS, 2 Bitter, 4 Cerveza). Misma fórmula en SQL (`precio_con_descuento`) y en `src/lib/precios.ts`.
-- Esquema en `supabase/migrations/0001_esquema.sql` + `0002_precios_genericos_al_instante.sql` + `0003_datos_sku.sql` (se corren en orden; 0002 y 0003 son repetibles); `supabase/reset.sql` borra todo para empezar de cero.
+- Esquema en `supabase/migrations/0001_esquema.sql` + `0002_precios_genericos_al_instante.sql` + `0003_datos_sku.sql` + `0004_niveles_editables.sql` (se corren en orden; 0002 a 0004 son repetibles); `supabase/reset.sql` borra todo para empezar de cero.
 - Genérico: al crearlo, cambiarle nivel/modalidad/cotiza o tildarle un SKU, los disparadores guardan sus precios del mes actual (hora Argentina) con `lista_vigente` (función `recalcular_cliente`). Meses anteriores no se tocan.
+- Niveles de descuento editables (pantalla Niveles; el front los lee con `useNiveles()`, no hay niveles fijos en el código). Desde 0004: `niveles(id, nombre, descuento_pct, orden)` y `clientes.nivel_id` → `niveles.id` (pedido por Javier: renombrar libremente). Las vistas exponen `nivel` = nombre y `nivel_id`. Cambiar % recalcula el mes actual de sus genéricos (disparador `niveles_precios`); no se borra un nivel con clientes. No volver a correr 0002 después de 0004.
 - Meses guardados como fecha día 1 (`2026-05-01` = MAY 2026).
 - Nombres de cliente completos (decidido por Javier, 2026-11-17). El código de cliente (`nro_cliente`) es la clave de negocio; el Excel no lo trae y se completa en la app.
 

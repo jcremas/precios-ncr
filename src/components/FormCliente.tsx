@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { DESCUENTOS, MODALIDADES, NIVELES, nombreModalidad, type Modalidad, type Nivel } from '@/lib/tipos'
+import { MODALIDADES, nombreModalidad, type Modalidad } from '@/lib/tipos'
+import { etiquetaNivel, useNiveles } from '@/lib/niveles'
 import { soloDatos, type DatosCliente } from '@/lib/clientes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,10 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
   onGuardar: (d: DatosCliente) => Promise<string | null>
   onCancelar: () => void
 }) {
-  const [d, setD] = useState<DatosCliente>(inicial)
+  const { niveles } = useNiveles()
+  // Un genérico nuevo arranca con el primer nivel (normalmente LISTA).
+  const [d, setD] = useState<DatosCliente>(() =>
+    !inicial.nombre && inicial.modalidad === 'GENERICO' && inicial.nivel_id == null ? { ...inicial, nivel_id: niveles[0]?.id ?? null } : inicial)
   const [error, setError] = useState<string | null>(null)
   const set = (k: keyof DatosCliente) => (e: { target: { value: string } }) => setD({ ...d, [k]: e.target.value })
 
@@ -22,7 +26,7 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
       Object.entries(soloDatos(d)).map(([k, v]) => [k, typeof v === 'string' ? v.trim() || null : v]),
     ) as DatosCliente
     if (!limpio.nombre) return setError('El nombre es obligatorio.')
-    if (limpio.modalidad === 'GENERICO' && limpio.cotiza && !limpio.nivel)
+    if (limpio.modalidad === 'GENERICO' && limpio.cotiza && limpio.nivel_id == null)
       return setError('Un cliente genérico necesita su nivel de descuento.')
     setError(await onGuardar(limpio))
   }
@@ -43,7 +47,7 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
         <Select id="modalidad" value={d.modalidad} onChange={(e) => {
           const modalidad = e.target.value as Modalidad
           // Un especial nuevo arranca sin nivel: se define al armar su primera lista.
-          setD({ ...d, modalidad, nivel: modalidad === 'ESPECIAL' && !inicial.nombre ? null : d.nivel ?? (modalidad === 'GENERICO' ? 'LISTA' : null) })
+          setD({ ...d, modalidad, nivel_id: modalidad === 'ESPECIAL' && !inicial.nombre ? null : d.nivel_id ?? (modalidad === 'GENERICO' ? niveles[0]?.id ?? null : null) })
         }}>
           {MODALIDADES.map((m) => <option key={m} value={m}>{nombreModalidad(m)}</option>)}
         </Select>
@@ -55,9 +59,9 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
       </div>
       <div className="grid gap-2">
         <Label htmlFor="nivel">{d.modalidad === 'GENERICO' ? 'Nivel de descuento' : 'Nivel de referencia (opcional)'}</Label>
-        <Select id="nivel" value={d.nivel ?? ''} onChange={(e) => setD({ ...d, nivel: (e.target.value || null) as Nivel | null })}>
+        <Select id="nivel" value={d.nivel_id ?? ''} onChange={(e) => setD({ ...d, nivel_id: e.target.value ? Number(e.target.value) : null })}>
           <option value="">Sin nivel</option>
-          {NIVELES.map((n) => <option key={n} value={n}>{n} ({DESCUENTOS[n]}%)</option>)}
+          {niveles.map((n) => <option key={n.id} value={n.id}>{etiquetaNivel(n)}</option>)}
         </Select>
       </div>
       <div className="flex items-center gap-2 pt-6">

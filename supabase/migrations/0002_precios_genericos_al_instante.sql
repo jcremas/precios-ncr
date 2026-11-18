@@ -7,7 +7,8 @@
 -- Los meses anteriores no se tocan: el cambio queda como un mes más en
 -- el historial. Si se corrige un precio del mismo mes, el anterior queda
 -- en precios_cliente_cambios.
--- Se puede correr más de una vez sin problema.
+-- Se puede correr más de una vez sin problema, PERO NO después de 0004
+-- (0004 deja la versión nueva de estas funciones).
 -- =====================================================================
 
 -- Mes actual en hora de Argentina (primer día del mes).

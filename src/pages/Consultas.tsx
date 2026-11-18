@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { mensajeError, traerTodo } from '@/lib/datos'
 import { aInputMes, nombreMes, pct, precio } from '@/lib/formato'
 import { exportarExcel, mediana } from '@/lib/precios'
-import { NIVELES, nombreModalidad, type IndiceCliente, type PrecioCliente, type PrecioDetalle, type Sku } from '@/lib/tipos'
+import { useNiveles } from '@/lib/niveles'
+import { nombreModalidad, type IndiceCliente, type PrecioCliente, type PrecioDetalle, type Sku } from '@/lib/tipos'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -47,6 +48,8 @@ function BotonExportar({ onClick }: { onClick: () => void }) {
 }
 
 export default function Consultas() {
+  const { niveles, mayor } = useNiveles()
+  const nombreMayor = mayor?.nombre ?? 'mayor descuento'
   const [pestana, setPestana] = useState<Pestana>('sku')
   const [meses, setMeses] = useState<string[]>([])
   const [mes, setMes] = useState('')
@@ -160,7 +163,7 @@ export default function Consultas() {
           <Label htmlFor="niv" className="text-xs">Nivel</Label>
           <Select id="niv" className="w-36" value={nivel} onChange={(e) => setNivel(e.target.value)}>
             <option value="">Todos</option>
-            {NIVELES.map((n) => <option key={n}>{n}</option>)}
+            {niveles.map((n) => <option key={n.nombre}>{n.nombre}</option>)}
           </Select>
         </div>
       </div>
@@ -303,16 +306,16 @@ export default function Consultas() {
         return (
           <div className="grid gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <p className="mr-auto text-sm text-muted-foreground">Precio de cada cliente frente a la lista general y a MATAR (−15%) del mes ({titulo}).</p>
+              <p className="mr-auto text-sm text-muted-foreground">Precio de cada cliente frente a la lista general y a {nombreMayor} del mes ({titulo}).</p>
               <Button variant="outline" size="sm" onClick={() => setOrden(orden === 'desc' ? 'asc' : 'desc')}><ArrowDownUp /> {orden === 'desc' ? 'Mayor descuento primero' : 'Menor descuento primero'}</Button>
-              <BotonExportar onClick={() => exportarExcel(`brecha_lista_${aInputMes(mes)}`, ['Cliente', 'SKU', 'Producto', 'Precio', 'Lista', 'vs lista %', 'MATAR', 'vs MATAR %', 'Piso', 'Bajo el piso'],
+              <BotonExportar onClick={() => exportarExcel(`brecha_lista_${aInputMes(mes)}`, ['Cliente', 'SKU', 'Producto', 'Precio', 'Lista', 'vs lista %', nombreMayor, `vs ${nombreMayor} %`, 'Piso', 'Bajo el piso'],
                 filas.map((f) => [f.cliente, f.sku, f.descripcion, f.precio, f.lista, r1(f.vsLista), f.matar, r1(f.vsMatar), f.precio_minimo, f.bajo ? 'SÍ' : '']))} />
             </div>
             <Table>
               <TableHeader><TableRow>
                 <TableHead>Cliente</TableHead><TableHead>SKU</TableHead><TableHead>Producto</TableHead>
                 <TableHead className="text-right">Precio</TableHead><TableHead className="text-right">Lista</TableHead><TableHead className="text-right">vs lista</TableHead>
-                <TableHead className="text-right">MATAR</TableHead><TableHead className="text-right">vs MATAR</TableHead><TableHead className="text-right">Piso</TableHead>
+                <TableHead className="text-right">{mayor?.nombre ?? 'Mayor descuento'}</TableHead><TableHead className="text-right">vs {mayor?.nombre ?? 'mayor descuento'}</TableHead><TableHead className="text-right">Piso</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {filas.map((f) => (

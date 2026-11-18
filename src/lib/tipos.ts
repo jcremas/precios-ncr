@@ -1,6 +1,5 @@
-export type Nivel = 'LISTA' | 'MEDIO' | 'AGRESIVO' | 'DIEGO' | 'MATAR'
-export const NIVELES: Nivel[] = ['LISTA', 'MEDIO', 'AGRESIVO', 'DIEGO', 'MATAR']
-export const DESCUENTOS: Record<Nivel, number> = { LISTA: 0, MEDIO: 3, AGRESIVO: 6, DIEGO: 10, MATAR: 15 }
+/** Nombre del nivel de descuento, tal como lo muestran las vistas. */
+export type Nivel = string
 
 export type Modalidad = 'GENERICO' | 'ESPECIAL'
 export const MODALIDADES: Modalidad[] = ['GENERICO', 'ESPECIAL']
@@ -30,7 +29,7 @@ export interface Cliente {
   email: string | null
   condicion_pago: string | null
   modalidad: Modalidad
-  nivel: Nivel | null
+  nivel_id: number | null
   cotiza: boolean
   observaciones: string | null
   activo: boolean
@@ -42,6 +41,7 @@ export interface IndiceCliente {
   nombre: string
   modalidad: Modalidad
   nivel: Nivel | null
+  nivel_id: number | null
   cotiza: boolean
   segmento: string | null
   activo: boolean

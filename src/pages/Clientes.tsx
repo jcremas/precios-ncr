@@ -4,7 +4,8 @@ import { Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { nombreMes } from '@/lib/formato'
-import { MODALIDADES, NIVELES, nombreModalidad, type IndiceCliente } from '@/lib/tipos'
+import { MODALIDADES, nombreModalidad, type IndiceCliente } from '@/lib/tipos'
+import { useNiveles } from '@/lib/niveles'
 import { clienteVacio, traducirError, type DatosCliente } from '@/lib/clientes'
 import { FormCliente } from '@/components/FormCliente'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 export default function Clientes() {
+  const { niveles } = useNiveles()
   const navigate = useNavigate()
   const [lista, setLista] = useState<IndiceCliente[]>([])
   const [filtro, setFiltro] = useState('')
@@ -61,7 +63,7 @@ export default function Clientes() {
         </Select>
         <Select className="w-40" value={nivel} onChange={(e) => setNivel(e.target.value)}>
           <option value="">Todos los niveles</option>
-          {NIVELES.map((n) => <option key={n}>{n}</option>)}
+          {niveles.map((n) => <option key={n.nombre}>{n.nombre}</option>)}
           <option value="NO">No cotiza</option>
         </Select>
         <Button onClick={() => setNuevo(true)}><Plus /> Nuevo cliente</Button>

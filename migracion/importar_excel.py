@@ -259,11 +259,13 @@ def main() -> int:
         modalidad = "ESPECIAL" if nivel == "ESPECIAL" else "GENERICO"
         cotiza = nivel != "NO COTIZA"
         nivel = nivel if nivel in NIVELES_LISTA else None
+        # Requiere el esquema con 0004 (clientes.nivel_id enlazado a niveles.id).
+        nivel_sql = f"(select id from niveles where nombre = {q(nivel)})" if nivel else "null"
         L.append("insert into clientes (nombre, nombre_hoja_excel, nro_cliente, segmento, contacto, email, "
-                 "condicion_pago, modalidad, nivel, cotiza, observaciones) values ("
+                 "condicion_pago, modalidad, nivel_id, cotiza, observaciones) values ("
                  + ", ".join(q(c.get(k)) for k in ["nombre", "hoja", "nro_cliente", "segmento", "contacto",
                                                    "email", "condicion_pago"])
-                 + f", {q(modalidad)}, {q(nivel)}, {'true' if cotiza else 'false'}, {q(c.get('observaciones'))});")
+                 + f", {q(modalidad)}, {nivel_sql}, {'true' if cotiza else 'false'}, {q(c.get('observaciones'))});")
     # La base tilda todos los SKUs activos al crear un cliente: para los que
     # tienen hoja propia se deja tildado solo lo que compran.
     for clave, g in grillas.items():

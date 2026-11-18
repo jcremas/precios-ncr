@@ -12,6 +12,8 @@ import Cotizar from '@/pages/Cotizar'
 import Skus from '@/pages/Skus'
 import ListaGeneral from '@/pages/ListaGeneral'
 import Consultas from '@/pages/Consultas'
+import Niveles from '@/pages/Niveles'
+import { NivelesProvider } from '@/lib/niveles'
 
 const SECCIONES = [
   { a: '/envio', texto: 'Envío mensual' },
@@ -20,6 +22,7 @@ const SECCIONES = [
   { a: '/consultas', texto: 'Consultas' },
   { a: '/cotizar', texto: 'Cotizar' },
   { a: '/skus', texto: 'SKUs' },
+  { a: '/niveles', texto: 'Niveles' },
 ]
 
 function Layout() {
@@ -61,7 +64,7 @@ function Protegido() {
   const { session, cargando } = useAuth()
   if (cargando) return <p className="p-8 text-muted-foreground">Cargando…</p>
   if (!session) return <Navigate to="/login" replace />
-  return <Layout />
+  return <NivelesProvider><Layout /></NivelesProvider>
 }
 
 function FaltaConfig() {
@@ -92,6 +95,7 @@ export default function App() {
             <Route path="/consultas" element={<Consultas />} />
             <Route path="/cotizar" element={<Cotizar />} />
             <Route path="/skus" element={<Skus />} />
+            <Route path="/niveles" element={<Niveles />} />
             <Route path="*" element={<Navigate to="/envio" replace />} />
           </Route>
         </Routes>
