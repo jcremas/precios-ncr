@@ -11,7 +11,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-interface Linea { sku: number; descripcion: string; precio: number; mes: string; origen: string }
+interface Linea { sku: number; descripcion: string; precio: number; mes: string; origen: string; pallet?: number | null }
+
+const fmtUnidades = new Intl.NumberFormat('es-AR')
 
 export default function Cotizar() {
   const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel' | 'nro_cliente' | 'modalidad' | 'cotiza'>[]>([])
@@ -39,9 +41,10 @@ export default function Cotizar() {
     setCopiado(false)
     if (!cliente) return
     if (!cliente.cotiza) return setAviso('Este cliente está marcado como NO COTIZA.')
-    cotizar(cliente).then(({ lineas, error }) => {
+    Promise.all([cotizar(cliente), supabase.from('skus').select('sku, unidades_pallet')]).then(([{ lineas, error }, s]) => {
       if (error) return setAviso(error)
-      setLineas(lineas)
+      const pallet = new Map((s.data ?? []).map((x) => [x.sku, x.unidades_pallet as number | null]))
+      setLineas(lineas.map((l) => ({ ...l, pallet: pallet.get(l.sku) ?? null })))
       if (!lineas.length) setAviso(cliente.modalidad === 'ESPECIAL' ? 'Este cliente todavía no tiene precios cargados.' : 'No hay lista general cargada o el cliente no tiene SKUs tildados.')
     })
   }, [cliente])
@@ -68,10 +71,12 @@ export default function Cotizar() {
   }
 
   async function copiar() {
+    // Texto compacto para pegar en el cuerpo del correo: una línea por SKU.
     const texto = [
       `Lista de precios - ${cliente?.nombre}`,
       '',
-      ...lineas.map((l) => `${l.sku}\t${l.descripcion}\t${precio(l.precio)}`),
+      ...lineas.map((l) => [l.sku, l.descripcion, precio(Number(l.precio)), l.pallet ? `${fmtUnidades.format(l.pallet)} u/pallet` : null]
+        .filter(Boolean).join(' · ')),
     ].join('\n')
     await navigator.clipboard.writeText(texto)
     setCopiado(true)
@@ -121,6 +126,7 @@ export default function Cotizar() {
                 <TableHead>SKU</TableHead>
                 <TableHead>Producto</TableHead>
                 <TableHead className="text-right">Precio</TableHead>
+                <TableHead className="text-right">Unid./pallet</TableHead>
                 <TableHead>Desde</TableHead>
               </TableRow>
             </TableHeader>
@@ -130,6 +136,7 @@ export default function Cotizar() {
                   <TableCell className="font-mono text-xs">{l.sku}</TableCell>
                   <TableCell>{l.descripcion}</TableCell>
                   <TableCell className="text-right tabular-nums">{precio(Number(l.precio))}</TableCell>
+                  <TableCell className="text-right tabular-nums">{l.pallet ? fmtUnidades.format(l.pallet) : '—'}</TableCell>
                   <TableCell className="text-muted-foreground">{nombreMes(l.mes)}</TableCell>
                 </TableRow>
               ))}

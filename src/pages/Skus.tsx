@@ -12,15 +12,49 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 const ESTADOS: EstadoSku[] = ['ACTIVO', 'INACTIVO', 'DESCONTINUADO']
 
+/** '1.200' / '1200' -> 1200; vacío -> null; inválido -> undefined. */
+function aUnidades(texto: string): number | null | undefined {
+  const t = texto.trim().replace(/\./g, '')
+  if (!t) return null
+  return /^\d+$/.test(t) && Number(t) > 0 ? Number(t) : undefined
+}
+
+/** '0,48' / '480' / '1.250,5' -> número; vacío -> null; inválido -> undefined. */
+function aPeso(texto: string): number | null | undefined {
+  let t = texto.trim()
+  if (!t) return null
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.')
+  const n = Number(t)
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : undefined
+}
+
+const txt = (n: number | null) => (n == null ? '' : String(n).replace('.', ','))
+
+/** Valida los tres datos del SKU; devuelve el error o los valores. */
+function datosSku(pallet: string, peso: string, color: string) {
+  const unidades_pallet = aUnidades(pallet)
+  if (unidades_pallet === undefined) return { error: 'Unidades por pallet: número entero' }
+  const p = aPeso(peso)
+  if (p === undefined) return { error: 'Peso: número mayor a 0' }
+  if (color.trim().length > 10) return { error: 'Color: hasta 10 caracteres' }
+  return { valores: { unidades_pallet, peso: p, color: color.trim() || null } }
+}
+
 function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
   const [d, setD] = useState(s)
   const [error, setError] = useState<string | null>(null)
+  const [pallet, setPallet] = useState(txt(s.unidades_pallet))
+  const [peso, setPeso] = useState(txt(s.peso))
+  const [color, setColor] = useState(s.color ?? '')
   const cambio = d.descripcion !== s.descripcion || d.familia !== s.familia || d.estado !== s.estado || d.admite_descuento !== s.admite_descuento
+    || pallet !== txt(s.unidades_pallet) || peso !== txt(s.peso) || color !== (s.color ?? '')
 
   async function guardar() {
     if (!d.descripcion.trim()) return setError('Falta descripción')
+    const r = datosSku(pallet, peso, color)
+    if (r.error) return setError(r.error)
     const { error } = await supabase.from('skus')
-      .update({ descripcion: d.descripcion.trim(), familia: d.familia?.trim() || null, estado: d.estado, admite_descuento: d.admite_descuento })
+      .update({ descripcion: d.descripcion.trim(), familia: d.familia?.trim() || null, estado: d.estado, admite_descuento: d.admite_descuento, ...r.valores })
       .eq('sku', s.sku)
     if (error) return setError(mensajeError(error))
     setError(null)
@@ -41,6 +75,15 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
         <input type="checkbox" aria-label={`SKU ${s.sku} admite descuento`} checked={d.admite_descuento} onChange={(e) => setD({ ...d, admite_descuento: e.target.checked })} />
       </TableCell>
       <TableCell>
+        <Input className="h-8 w-20 text-right" inputMode="decimal" aria-label={`Peso ${s.sku}`} value={peso} onChange={(e) => setPeso(e.target.value)} />
+      </TableCell>
+      <TableCell>
+        <Input className="h-8 w-24 text-right" inputMode="numeric" aria-label={`Unidades por pallet ${s.sku}`} value={pallet} onChange={(e) => setPallet(e.target.value)} />
+      </TableCell>
+      <TableCell>
+        <Input className="h-8 w-28" maxLength={10} aria-label={`Color ${s.sku}`} value={color} onChange={(e) => setColor(e.target.value)} />
+      </TableCell>
+      <TableCell>
         {cambio && <Button size="sm" onClick={guardar}>Guardar</Button>}
         {error && <span className="ml-2 text-xs text-destructive">{error}</span>}
       </TableCell>
@@ -53,6 +96,9 @@ export default function Skus() {
   const [nuevo, setNuevo] = useState({ sku: '', descripcion: '', familia: '', admite_descuento: true })
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [verPegar, setVerPegar] = useState(false)
+  const [pegado, setPegado] = useState('')
+  const [aviso, setAviso] = useState<string | null>(null)
 
   async function cargar() {
     const { data, error } = await supabase.from('skus').select('*').order('descripcion')
@@ -77,12 +123,48 @@ export default function Skus() {
     cargar()
   }
 
+  async function aplicarPegado() {
+    // Formato: SKU [tab] peso [tab] unidades por pallet [tab] color, una fila por línea (copiado de Excel).
+    const desconocidos: string[] = []
+    const invalidos: string[] = []
+    let ok = 0
+    for (const linea of pegado.split(/\r?\n/)) {
+      const partes = linea.split(/\t|;/).map((x) => x.trim())
+      if (!/^\d+$/.test(partes[0] ?? '')) continue
+      const sku = Number(partes[0])
+      if (!skus.some((s) => s.sku === sku)) { desconocidos.push(partes[0]); continue }
+      const r = datosSku(partes[2] ?? '', partes[1] ?? '', partes[3] ?? '')
+      if (r.error) { invalidos.push(`${partes[0]} (${r.error})`); continue }
+      const { error } = await supabase.from('skus').update(r.valores!).eq('sku', sku)
+      if (error) return setError(mensajeError(error))
+      ok++
+    }
+    setPegado('')
+    setVerPegar(false)
+    setAviso(`Se guardaron los datos de ${ok} SKU(s).`
+      + (desconocidos.length ? ` No existen: ${desconocidos.join(', ')}.` : '')
+      + (invalidos.length ? ` Valor no válido en: ${invalidos.join(', ')}.` : ''))
+    cargar()
+  }
+
   return (
     <div className="grid gap-6">
-      <div className="flex items-center">
+      <div className="flex items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold">SKUs</h1>
+        <Button variant="outline" onClick={() => setVerPegar(!verPegar)}>Pegar datos desde Excel</Button>
         <Button onClick={() => setAbierto(true)}><Plus /> Nuevo SKU</Button>
       </div>
+
+      {verPegar && (
+        <Card>
+          <CardContent className="grid gap-2 pt-6">
+            <Label htmlFor="pegado">Copiá en Excel las columnas SKU, Peso, Unidades por pallet y Color (en ese orden), y pegalas acá. Una celda vacía borra ese dato.</Label>
+            <textarea id="pegado" className="min-h-32 rounded-md border p-2 font-mono text-sm" value={pegado} onChange={(e) => setPegado(e.target.value)} placeholder={'11008938\t480\t1200\tVERDE\n11008939\t520\t1450\tCARAMELO'} />
+            <div><Button size="sm" onClick={aplicarPegado} disabled={!pegado.trim()}>Guardar</Button></div>
+          </CardContent>
+        </Card>
+      )}
+      {aviso && <p className="rounded-md bg-green-50 p-3 text-sm text-green-800">{aviso}</p>}
 
       {abierto && (
         <Card>
@@ -110,11 +192,14 @@ export default function Skus() {
             <TableHead>Familia</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead className="text-center">Admite descuento</TableHead>
+            <TableHead>Peso</TableHead>
+            <TableHead>Unid./pallet</TableHead>
+            <TableHead>Color</TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}-${s.admite_descuento}`} s={s} onGuardado={cargar} />)}
+          {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}-${s.admite_descuento}-${s.unidades_pallet}-${s.peso}-${s.color}`} s={s} onGuardado={cargar} />)}
         </TableBody>
       </Table>
     </div>
