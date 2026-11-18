@@ -120,7 +120,7 @@ function preparar(catalogo: SkuParaLeer[]): Clave[] {
 }
 
 /** Puntaje (0..1, o 1..2 si coincide un "Otro nombre"): cuánto de la línea explica el SKU y cuánto del SKU aparece en la línea. */
-function puntaje(c: Clave, linea: { attrs: Record<string, string>; palabras: Set<string>; plana: string }) {
+function puntaje(c: Clave, linea: { attrs: Record<string, string>; palabras: Set<string>; plana: string; upp: number | null }) {
   let enComun = 0
   let delSku = 0
   let deLinea = 0
@@ -141,6 +141,13 @@ function puntaje(c: Clave, linea: { attrs: Record<string, string>; palabras: Set
       if (a === b) enComun += peso
       else contradice++
     }
+  }
+  // Si el pedido trae pallets y botellas, sus unidades por pallet tienen que
+  // coincidir con las del SKU (ej. 4.872 / 4 = 1.218). Es una pista muy fuerte.
+  const up = c.sku.unidades_pallet
+  if (linea.upp && up) {
+    if (Math.abs(linea.upp - up) <= up * 0.01) { enComun += 2; delSku += 2; deLinea += 2 }
+    else contradice++
   }
   // Otros nombres cargados por Javier: mandan sobre la descripción. Si la línea
   // tiene uno, ese SKU gana a cualquiera que no lo tenga (puntaje 1 a 2) y entre
@@ -175,7 +182,8 @@ export function leerPedidoPorReglas(texto: string, catalogo: SkuParaLeer[]): Fil
     const n = normalizar(limpia)
     const linea = { attrs: atributos(n.replace(/\b\d+\s(?:pallets?|palets?|pals?|plts?|botellas?|unidades|u)\b/g, ' ')), palabras: new Set(palabrasClave(n)), plana: n }
     const { pallets: palletsTexto, botellas } = cantidades(limpia)
-    const ranking = claves.map((c) => ({ c, v: puntaje(c, linea) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v)
+    const upp = palletsTexto && botellas ? botellas / palletsTexto : null
+    const ranking = claves.map((c) => ({ c, v: puntaje(c, { ...linea, upp }) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v)
     const [mejor, segundo] = ranking
     // Línea sin cantidades ni parecido a ningún producto: saludo, firma, etc.
     if ((!mejor || mejor.v < 0.3) && palletsTexto == null && botellas == null) continue
