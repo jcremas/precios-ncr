@@ -124,7 +124,7 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
             onChange={(e) => setTexto(e.target.value)}
             placeholder={'3 pallets botella Burdeos Cónica Baja 750 – Verde – Boca corcho /// 3.402 botellas\n4 pallets botella Burdeos Giuliana 750 – Verde – Boca Corcho /// 4.872 botellas'} />
           <div className="flex items-center gap-2">
-            <Button onClick={leer} disabled={!texto.trim() || leyendo}>{leyendo ? 'Leyendo…' : 'Leer pedido con IA'}</Button>
+            <Button onClick={leer} disabled={!texto.trim() || leyendo}>{leyendo ? 'Leyendo… (puede tardar unos segundos)' : 'Leer pedido con IA'}</Button>
             {filas.length > 0 && <Button variant="ghost" onClick={() => { setFilas([]); setCopiado(false) }}>Limpiar resultado</Button>}
           </div>
         </div>

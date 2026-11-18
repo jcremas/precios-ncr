@@ -12,6 +12,7 @@
 // * Archivo único y sin dependencias: se puede pegar tal cual en el editor
 //   de Edge Functions del panel de Supabase.
 // Secretos: GEMINI_API_KEY (obligatorio), GEMINI_MODEL (opcional).
+// Si Gemini está saturado (503) reintenta y prueba otros modelos gratuitos.
 // =====================================================================
 
 const CORS = {
@@ -21,6 +22,11 @@ const CORS = {
 }
 
 const MAX_TEXTO = 8000
+
+/** Modelos gratuitos a probar si el elegido está saturado o sin cupo (en orden). */
+const RESPALDO = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
+/** Esperas entre reintentos con el mismo modelo (milisegundos). */
+const ESPERAS = [1500, 4000]
 
 interface SkuCatalogo {
   sku: number
@@ -114,22 +120,54 @@ Deno.serve(async (req) => {
       s.unidades_pallet && `${s.unidades_pallet} u/pallet`, s.sinonimos && `otros nombres: ${s.sinonimos}`]
       .filter(Boolean).join(' | '))
 
-  const pedidoIA = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: INSTRUCCIONES }] },
-      contents: [{ role: 'user', parts: [{ text: `CATÁLOGO (SKU | descripción | datos):\n${lineasCatalogo.join('\n')}\n\nPEDIDO:\n${texto}` }] }],
-      generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: ESQUEMA },
-    }),
+  const cuerpoIA = JSON.stringify({
+    systemInstruction: { parts: [{ text: INSTRUCCIONES }] },
+    contents: [{ role: 'user', parts: [{ text: `CATÁLOGO (SKU | descripción | datos):\n${lineasCatalogo.join('\n')}\n\nPEDIDO:\n${texto}` }] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: ESQUEMA },
   })
 
-  if (!pedidoIA.ok) {
-    const detalle = await pedidoIA.text()
-    if (pedidoIA.status === 429) return responder({ error: 'Se llegó al límite gratuito de Gemini por ahora. Probá de nuevo en un minuto (o mañana si es el límite diario).' }, 429)
-    if (pedidoIA.status === 400 && /API key/i.test(detalle)) return responder({ error: 'La clave de Gemini no es válida. Revisá el secreto GEMINI_API_KEY.' }, 502)
-    if (pedidoIA.status === 404) return responder({ error: `El modelo "${modelo}" no existe. Revisá el secreto GEMINI_MODEL o borralo.` }, 502)
-    return responder({ error: `Gemini respondió con error ${pedidoIA.status}.`, detalle: detalle.slice(0, 500) }, 502)
+  // Gemini gratis a veces está saturado (503) o llega al límite (429). Se
+  // reintenta con espera y, si sigue, se prueba con otro modelo gratuito.
+  const modelos = [...new Set([modelo, ...RESPALDO])]
+  let pedidoIA: Response | null = null
+  let usado = modelo
+  let ultimoEstado = 0
+  let ultimoDetalle = ''
+  let saturado = false
+  let sinCupo = false
+  buscar: for (const m of modelos) {
+    for (let intento = 0; intento < ESPERAS.length + 1; intento++) {
+      if (intento > 0) await new Promise((r) => setTimeout(r, ESPERAS[intento - 1]))
+      let resp: Response
+      try {
+        resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
+          body: cuerpoIA,
+        })
+      } catch (e) {
+        ultimoEstado = 0
+        ultimoDetalle = String(e)
+        saturado = true
+        continue
+      }
+      if (resp.ok) { pedidoIA = resp; usado = m; break buscar }
+      ultimoEstado = resp.status
+      ultimoDetalle = await resp.text()
+      if (resp.status === 429) sinCupo = true
+      if ([500, 502, 503, 504].includes(resp.status)) saturado = true
+      if (resp.status === 400 && /API key/i.test(ultimoDetalle)) return responder({ error: 'La clave de Gemini no es válida. Revisá el secreto GEMINI_API_KEY.' }, 502)
+      if (resp.status === 403) return responder({ error: 'Google rechazó la clave de Gemini (sin permiso). Revisá el secreto GEMINI_API_KEY.' }, 502)
+      if (resp.status === 404 || resp.status === 429) continue buscar // modelo inexistente o límite de ese modelo: pasar al siguiente
+      if (![500, 502, 503, 504].includes(resp.status)) // otro error: no tiene sentido reintentar
+        return responder({ error: `Gemini respondió con error ${resp.status}.`, detalle: ultimoDetalle.slice(0, 500) }, 502)
+    }
+  }
+
+  if (!pedidoIA) {
+    if (saturado) return responder({ error: 'Gemini está saturado en este momento (pasa a veces en el plan gratis). Se reintentó varias veces y con otros modelos. Probá de nuevo en unos minutos.' }, 503)
+    if (sinCupo) return responder({ error: 'Se llegó al límite gratuito de Gemini por ahora. Probá de nuevo en un minuto (o mañana si es el límite diario).' }, 429)
+    return responder({ error: `Gemini respondió con error ${ultimoEstado}.`, detalle: ultimoDetalle.slice(0, 500) }, 502)
   }
 
   const resultado = await pedidoIA.json()
@@ -155,5 +193,5 @@ Deno.serve(async (req) => {
     }
   })
 
-  return responder({ filas: limpias, modelo })
+  return responder({ filas: limpias, modelo: usado })
 })
