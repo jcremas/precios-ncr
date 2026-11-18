@@ -19,7 +19,7 @@ const PESTANAS = [
   { id: 'ranking', texto: 'Ranking de clientes' },
   { id: 'brecha', texto: 'Brecha contra la lista' },
   { id: 'ficha', texto: 'Ficha del cliente' },
-  { id: 'envios', texto: 'Envíos del mes' },
+  { id: 'envios', texto: 'Ajustes del mes' },
   { id: 'desactualizados', texto: 'Desactualizados' },
   { id: 'cobertura', texto: 'Cobertura' },
 ] as const
@@ -397,7 +397,7 @@ export default function Consultas() {
           <div className="grid gap-3">
             <div className="flex items-center gap-3">
               <p className="mr-auto text-sm text-muted-foreground">{filas.length - faltan} cliente(s) con precios de {nombreMes(mes)} y <span className="font-medium text-red-700">{faltan} sin precios</span> ({titulo}).</p>
-              <BotonExportar onClick={() => exportarExcel(`envios_${aInputMes(mes)}`, ['Cliente', 'Código', 'Modalidad', 'SKUs tildados', `SKUs con precio ${nombreMes(mes)}`, 'Estado'],
+              <BotonExportar onClick={() => exportarExcel(`ajustes_${aInputMes(mes)}`, ['Cliente', 'Código', 'Modalidad', 'SKUs tildados', `SKUs con precio ${nombreMes(mes)}`, 'Estado'],
                 filas.map((f) => [f.nombre, f.nro_cliente, nombreModalidad(f.modalidad), f.skus_activos, f.conPrecio, f.conPrecio ? (f.conPrecio < f.skus_activos ? 'Incompleto' : 'Enviado') : 'Falta']))} />
             </div>
             <Table>

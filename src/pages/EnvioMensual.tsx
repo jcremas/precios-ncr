@@ -182,7 +182,7 @@ export default function EnvioMensual() {
     <div className="grid gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Envío mensual</CardTitle>
+          <CardTitle>Ajuste mensual</CardTitle>
           <CardDescription>
             Para clientes especiales (los genéricos se actualizan al publicar la lista general). Elegí un cliente o TODOS, el mes y, si querés, un % de aumento sobre el último precio. A la derecha tenés la lista general y el precio mínimo: si un precio queda por debajo del mínimo se marca en rojo.
           </CardDescription>

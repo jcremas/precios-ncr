@@ -1,6 +1,6 @@
 # Precios NCR
 
-App web para gestionar precios por cliente de Nueva Cristalería Rosario: historial por cliente, SKU y mes, envío mensual con % de aumento, cotizador y alta/edición de clientes y SKUs. Reemplaza la planilla Excel con macros.
+App web para gestionar precios por cliente de Nueva Cristalería Rosario: historial por cliente, SKU y mes, ajuste mensual con % de aumento, cotizador y alta/edición de clientes y SKUs. Reemplaza la planilla Excel con macros.
 
 **Tecnología:** Supabase (base de datos y login) · React + TypeScript + Tailwind + shadcn/ui · Vercel (publicación).
 
@@ -8,7 +8,7 @@ App web para gestionar precios por cliente de Nueva Cristalería Rosario: histor
 
 | Carpeta / archivo | Para qué sirve |
 |---|---|
-| `src/` | La app (pantallas: Envío mensual, Clientes, Ficha de cliente con historial, Cotizar, SKUs). |
+| `src/` | La app (pantallas: Ajuste mensual, Clientes, Ficha de cliente con historial, Cotizar, SKUs). |
 | `supabase/migrations/0001_esquema.sql` | Crea las tablas, la seguridad (login + RLS) y las vistas. Se corre una sola vez. |
 | `supabase/migrations/0002_precios_genericos_al_instante.sql` | Precios de los genéricos al instante (al crearlos o cambiarles el nivel). Se corre después de 0001. |
 | `supabase/migrations/0003_datos_sku.sql` | Peso, unidades por pallet y color de cada SKU. |
@@ -93,7 +93,7 @@ El script muestra un resumen (51 clientes especiales, 28 SKUs, lista general de 
 
 - **clientes**: nombre completo, código de cliente único y **modalidad**:
   - **Genérico**: paga la lista general menos el descuento de su nivel (arrancan LISTA 0%, MEDIO 3%, AGRESIVO 6%, DIEGO 10%, MATAR 15%; se editan en la pantalla Niveles). Sus precios se guardan solos al **crearlo**, al **cambiarle el nivel**, al **tildarle un SKU** (mes actual, con la lista vigente) y al **publicar** cada lista general. Los meses anteriores no se tocan.
-  - **Especial**: tiene su lista propia. La primera se arma con la lista general menos un descuento elegido; después se maneja con % y a mano en Envío mensual.
+  - **Especial**: tiene su lista propia. La primera se arma con la lista general menos un descuento elegido; después se maneja con % y a mano en Ajuste mensual.
   - **Cotiza** sí/no: un cliente que no cotiza queda bloqueado sin borrarlo.
 - **skus**: el número de SKU es la clave permanente (siempre entero). **Admite descuento** = no: vale el precio de lista en todos los niveles.
 - **lista_general**: un precio de LISTA por SKU y mes, más el **precio mínimo** (piso) de referencia. Los niveles se calculan: LISTA × (1 − descuento), redondeado a 1 decimal.
@@ -105,10 +105,10 @@ El script muestra un resumen (51 clientes especiales, 28 SKUs, lista general de 
 
 | Pantalla | Para qué |
 |---|---|
-| Envío mensual | Precios del mes de los clientes especiales: % de aumento, edición a mano, lista y mínimo de referencia (en rojo si quedás debajo del piso). |
+| Ajuste mensual | Precios del mes de los clientes especiales: % de aumento, edición a mano, lista y mínimo de referencia (en rojo si quedás debajo del piso). |
 | Lista general | Cargar la lista del mes (a mano, con % sobre la anterior o pegando desde Excel), el mínimo, y publicarla a los genéricos. |
 | Clientes | Índice, alta y edición. En la ficha: historial, mapa de SKUs y, para un especial nuevo, armar su primera lista. |
-| Consultas | Por SKU (mín., máx., promedio, mediana y detalle ordenable), ranking de clientes, brecha contra la lista, ficha, envíos del mes, desactualizados y cobertura. Todo se exporta a Excel. |
+| Consultas | Por SKU (mín., máx., promedio, mediana y detalle ordenable), ranking de clientes, brecha contra la lista, ficha, ajustes del mes, desactualizados y cobertura. Todo se exporta a Excel. |
 | Cotizar | Precios vigentes de cualquier cliente (filtro genéricos/especiales y búsqueda), con unidades por pallet, en texto compacto para pegar en el correo. |
 | Niveles | Agregar niveles de descuento, cambiar nombre, % y orden. Al cambiar el % se recalculan los precios del mes de sus genéricos. Un nivel con clientes no se borra. |
 | SKUs | Alta y edición, estado, si admite descuento, peso, unidades por pallet y color (también pegando desde Excel). |

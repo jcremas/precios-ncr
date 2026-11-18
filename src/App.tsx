@@ -16,7 +16,7 @@ import Niveles from '@/pages/Niveles'
 import { NivelesProvider } from '@/lib/niveles'
 
 const SECCIONES = [
-  { a: '/envio', texto: 'Envío mensual' },
+  { a: '/ajuste', texto: 'Ajuste mensual' },
   { a: '/lista', texto: 'Lista general' },
   { a: '/clientes', texto: 'Clientes' },
   { a: '/consultas', texto: 'Consultas' },
@@ -87,8 +87,9 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<Protegido />}>
-            <Route index element={<Navigate to="/envio" replace />} />
-            <Route path="/envio" element={<EnvioMensual />} />
+            <Route index element={<Navigate to="/ajuste" replace />} />
+            <Route path="/ajuste" element={<EnvioMensual />} />
+            <Route path="/envio" element={<Navigate to="/ajuste" replace />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<ClienteDetalle />} />
             <Route path="/lista" element={<ListaGeneral />} />
@@ -96,7 +97,7 @@ export default function App() {
             <Route path="/cotizar" element={<Cotizar />} />
             <Route path="/skus" element={<Skus />} />
             <Route path="/niveles" element={<Niveles />} />
-            <Route path="*" element={<Navigate to="/envio" replace />} />
+            <Route path="*" element={<Navigate to="/ajuste" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
