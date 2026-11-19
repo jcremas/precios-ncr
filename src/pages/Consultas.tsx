@@ -54,7 +54,7 @@ export default function Consultas() {
   const [pestana, setPestana] = useState<Pestana>('sku')
   const [meses, setMeses] = useState<string[]>([])
   const [mes, setMes] = useState('')
-  const [modalidad, setModalidad] = useState('ESPECIAL')
+  const [modalidad, setModalidad] = useState('')
   const [nivel, setNivel] = useState('')
   const [detalle, setDetalle] = useState<PrecioDetalle[]>([])
   const [skus, setSkus] = useState<Sku[]>([])
@@ -107,14 +107,40 @@ export default function Consultas() {
       .catch((e) => setError(mensajeError(e)))
   }, [mes])
 
-  // Historial de especiales (para ficha y desactualizados).
+  // Historial de meses anteriores, solo cuando hace falta: en la ficha, del
+  // cliente elegido; en desactualizados, de los clientes del filtro
+  // (especiales, genéricos o todos).
+  const idsHistorial = useMemo(() => {
+    if (pestana === 'ficha') return clienteSel ? [Number(clienteSel)] : []
+    if (pestana === 'desactualizados')
+      return indice.filter((c) => c.activo && c.cotiza && (!modalidad || c.modalidad === modalidad) && (!nivel || c.nivel === nivel)).map((c) => c.id)
+    return []
+  }, [pestana, clienteSel, indice, modalidad, nivel])
+  const claveHistorial = idsHistorial.join(',')
+  const [historialDe, setHistorialDe] = useState<string | null>(null)
   useEffect(() => {
-    const ids = indice.filter((c) => c.modalidad === 'ESPECIAL').map((c) => c.id)
-    if (!ids.length) return
-    preciosDeClientes(ids)
-      .then((rows) => setHistorial(rows.map((r) => ({ ...r, precio: Number(r.precio) }))))
-      .catch((e) => setError(mensajeError(e)))
-  }, [indice])
+    if (!claveHistorial) return
+    let vigente = true
+    preciosDeClientes(claveHistorial.split(',').map(Number))
+      .then((rows) => {
+        if (!vigente) return
+        setHistorial(rows.map((r) => ({ ...r, precio: Number(r.precio) })))
+        setHistorialDe(claveHistorial)
+      })
+      .catch((e) => vigente && setError(mensajeError(e)))
+    return () => { vigente = false }
+  }, [claveHistorial])
+  const historialListo = !claveHistorial || historialDe === claveHistorial
+
+  // Al cambiar el grupo de clientes, ir al último mes con precios de ese grupo
+  // (ej. los genéricos pueden tener un mes más nuevo que los especiales).
+  const cambiarModalidad = (m: string) => {
+    setModalidad(m)
+    const ultimo = indice.filter((c) => c.activo && (!m || c.modalidad === m) && c.ultimo_mes)
+      .reduce<string | null>((max, c) => (max == null || c.ultimo_mes! > max ? c.ultimo_mes : max), null)
+    if (ultimo && meses.includes(ultimo)) setMes(ultimo)
+  }
+  const cuantos = (m: string) => indice.filter((c) => c.activo && c.modalidad === m).length
 
   const filtrado = useMemo(
     () => detalle.filter((d) => (!modalidad || d.modalidad === modalidad) && (!nivel || d.nivel === nivel)),
@@ -154,10 +180,10 @@ export default function Consultas() {
         </div>
         <div className="grid gap-1">
           <Label htmlFor="mod" className="text-xs">Clientes</Label>
-          <Select id="mod" className="w-40" value={modalidad} onChange={(e) => setModalidad(e.target.value)}>
-            <option value="ESPECIAL">Especiales</option>
-            <option value="GENERICO">Genéricos</option>
+          <Select id="mod" className="w-44" value={modalidad} onChange={(e) => cambiarModalidad(e.target.value)}>
             <option value="">Todos</option>
+            <option value="ESPECIAL">Especiales ({cuantos('ESPECIAL')})</option>
+            <option value="GENERICO">Genéricos ({cuantos('GENERICO')})</option>
           </Select>
         </div>
         <div className="grid gap-1">
@@ -356,6 +382,7 @@ export default function Consultas() {
               {filas.length > 0 && <div className="ml-auto"><BotonExportar onClick={() => exportarExcel(`ficha_${clienteSel}_${aInputMes(mes)}`, ['SKU', 'Producto', 'Precio', 'Anterior', 'Variación %', 'Promedio', 'vs promedio %', 'Puesto (1 = más barato)', 'De'],
                 filas.map((f) => [f.sku, f.descripcion, f.precio, f.anterior, r1(varPct(f.precio, f.anterior)), r1(f.prom), r1(varPct(f.precio, f.prom)), f.puesto, f.de]))} /></div>}
             </div>
+            {clienteSel && !historialListo && <p className="text-sm text-muted-foreground">Cargando meses anteriores…</p>}
             {clienteSel && !filas.length && <p className="text-sm text-muted-foreground">Este cliente no tiene precios en {nombreMes(mes)}.</p>}
             {filas.length > 0 && (
               <Table>
@@ -418,7 +445,8 @@ export default function Consultas() {
 
       {mes && pestana === 'desactualizados' && (() => {
         const UMBRAL = 2
-        const filas = indice.filter((c) => c.modalidad === 'ESPECIAL' && c.activo && c.cotiza).map((c) => {
+        if (!historialListo) return <p className="text-sm text-muted-foreground">Cargando historial…</p>
+        const filas = indice.filter((c) => c.activo && c.cotiza && (!modalidad || c.modalidad === modalidad) && (!nivel || c.nivel === nivel)).map((c) => {
           const h = historial.filter((x) => x.cliente_id === c.id && x.mes <= mes)
           let ultimoCambio = null as string | null
           const previo = new Map<number, number>()
@@ -432,17 +460,19 @@ export default function Consultas() {
         return (
           <div className="grid gap-3">
             <div className="flex items-center gap-3">
-              <p className="mr-auto text-sm text-muted-foreground">Clientes especiales sin cambios de precio hace {UMBRAL} meses o más, a {nombreMes(mes)}.</p>
-              <BotonExportar onClick={() => exportarExcel(`desactualizados_${aInputMes(mes)}`, ['Cliente', 'Código', 'Último cambio', 'Meses sin cambios'], filas.map((f) => [f.nombre, f.nro_cliente, f.ultimoCambio ? nombreMes(f.ultimoCambio) : 'Sin precios', f.meses]))} />
+              <p className="mr-auto text-sm text-muted-foreground">Clientes sin cambios de precio hace {UMBRAL} meses o más ({titulo}).{modalidad !== 'ESPECIAL' && ' En los genéricos el precio cambia cuando se publica una lista general nueva.'}</p>
+              <BotonExportar onClick={() => exportarExcel(`desactualizados_${aInputMes(mes)}`, ['Cliente', 'Código', 'Modalidad', 'Nivel', 'Último cambio', 'Meses sin cambios'], filas.map((f) => [f.nombre, f.nro_cliente, nombreModalidad(f.modalidad), f.nivel, f.ultimoCambio ? nombreMes(f.ultimoCambio) : 'Sin precios', f.meses]))} />
             </div>
-            {!filas.length && <p className="text-sm text-muted-foreground">Ninguno: todos los especiales tuvieron cambios en los últimos {UMBRAL} meses.</p>}
+            {!filas.length && <p className="text-sm text-muted-foreground">Ninguno: todos los clientes del filtro tuvieron cambios en los últimos {UMBRAL} meses.</p>}
             {filas.length > 0 && (
               <Table>
-                <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Último cambio</TableHead><TableHead className="text-right">Meses sin cambios</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Modalidad</TableHead><TableHead>Nivel</TableHead><TableHead>Último cambio</TableHead><TableHead className="text-right">Meses sin cambios</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {filas.map((f) => (
                     <TableRow key={f.id}>
                       <TableCell><Link className="text-primary hover:underline" to={`/clientes/${f.id}`}>{f.nombre}</Link></TableCell>
+                      <TableCell>{nombreModalidad(f.modalidad)}</TableCell>
+                      <TableCell>{f.nivel ?? ''}</TableCell>
                       <TableCell>{f.ultimoCambio ? nombreMes(f.ultimoCambio) : 'Sin precios'}</TableCell>
                       <TableCell className="text-right tabular-nums">{f.meses ?? '—'}</TableCell>
                     </TableRow>
