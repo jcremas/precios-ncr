@@ -47,7 +47,7 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
   const [peso, setPeso] = useState(txt(s.peso))
   const [color, setColor] = useState(s.color ?? '')
   const [sinonimos, setSinonimos] = useState(s.sinonimos ?? '')
-  const cambio = d.descripcion !== s.descripcion || d.familia !== s.familia || d.estado !== s.estado || d.admite_descuento !== s.admite_descuento
+  const cambio = d.descripcion !== s.descripcion || d.familia !== s.familia || d.estado !== s.estado || d.admite_descuento !== s.admite_descuento || d.para_genericos !== s.para_genericos
     || pallet !== txt(s.unidades_pallet) || peso !== txt(s.peso) || color !== (s.color ?? '') || sinonimos !== (s.sinonimos ?? '')
 
   async function guardar() {
@@ -57,7 +57,8 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
     if (sinonimos.trim().length > 300) return setError('Otros nombres: hasta 300 caracteres')
     const { error } = await supabase.from('skus')
       .update({ descripcion: d.descripcion.trim(), familia: d.familia?.trim() || null, estado: d.estado, admite_descuento: d.admite_descuento, ...r.valores,
-        ...(sinonimos !== (s.sinonimos ?? '') ? { sinonimos: sinonimos.trim() || null } : {}) })
+        ...(sinonimos !== (s.sinonimos ?? '') ? { sinonimos: sinonimos.trim() || null } : {}),
+        ...(d.para_genericos !== s.para_genericos ? { para_genericos: !!d.para_genericos } : {}) })
       .eq('sku', s.sku)
     if (error) return setError(mensajeError(error))
     setError(null)
@@ -76,6 +77,9 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
       </TableCell>
       <TableCell className="text-center">
         <input type="checkbox" aria-label={`SKU ${s.sku} admite descuento`} checked={d.admite_descuento} onChange={(e) => setD({ ...d, admite_descuento: e.target.checked })} />
+      </TableCell>
+      <TableCell className="text-center">
+        <input type="checkbox" aria-label={`SKU ${s.sku} va a genéricos`} checked={!!d.para_genericos} onChange={(e) => setD({ ...d, para_genericos: e.target.checked })} />
       </TableCell>
       <TableCell>
         <Input className="h-8 w-20 text-right" inputMode="decimal" aria-label={`Peso ${s.sku}`} value={peso} onChange={(e) => setPeso(e.target.value)} />
@@ -99,7 +103,7 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
 
 export default function Skus() {
   const [skus, setSkus] = useState<Sku[]>([])
-  const [nuevo, setNuevo] = useState({ sku: '', descripcion: '', familia: '', admite_descuento: true })
+  const [nuevo, setNuevo] = useState({ sku: '', descripcion: '', familia: '', admite_descuento: true, para_genericos: true })
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [verPegar, setVerPegar] = useState(false)
@@ -120,11 +124,11 @@ export default function Skus() {
     const sku = nuevo.sku.trim()
     if (!/^\d+$/.test(sku)) return setError('El SKU tiene que ser un número entero, sin letras ni puntos.')
     const { error } = await supabase.from('skus').insert({
-      sku: Number(sku), descripcion: nuevo.descripcion.trim(), familia: nuevo.familia.trim() || null, admite_descuento: nuevo.admite_descuento,
+      sku: Number(sku), descripcion: nuevo.descripcion.trim(), familia: nuevo.familia.trim() || null, admite_descuento: nuevo.admite_descuento, para_genericos: nuevo.para_genericos,
     })
     if (error) return setError(mensajeError(error).includes('skus_pkey') ? 'Ese SKU ya existe.' : mensajeError(error))
     setError(null)
-    setNuevo({ sku: '', descripcion: '', familia: '', admite_descuento: true })
+    setNuevo({ sku: '', descripcion: '', familia: '', admite_descuento: true, para_genericos: true })
     setAbierto(false)
     cargar()
   }
@@ -183,9 +187,10 @@ export default function Skus() {
               <div className="grid gap-2"><Label htmlFor="desc">Descripción</Label><Input id="desc" required value={nuevo.descripcion} onChange={(e) => setNuevo({ ...nuevo, descripcion: e.target.value })} /></div>
               <div className="grid gap-2"><Label htmlFor="fam">Familia</Label><Input id="fam" value={nuevo.familia} onChange={(e) => setNuevo({ ...nuevo, familia: e.target.value })} /></div>
               <label className="flex items-center gap-2 text-sm md:col-span-4"><input type="checkbox" checked={nuevo.admite_descuento} onChange={(e) => setNuevo({ ...nuevo, admite_descuento: e.target.checked })} /> Admite descuento (destildalo si vale lo mismo para todos los niveles)</label>
+              <label className="flex items-center gap-2 text-sm md:col-span-4"><input type="checkbox" checked={nuevo.para_genericos} onChange={(e) => setNuevo({ ...nuevo, para_genericos: e.target.checked })} /> Para genéricos (se tilda en todos los clientes genéricos; destildalo si no es de vino)</label>
               <div className="flex gap-2"><Button type="submit">Crear</Button><Button type="button" variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button></div>
             </form>
-            <p className="mt-3 text-xs text-muted-foreground">El SKU nuevo queda tildado en todos los clientes genéricos. A los especiales se lo agregás desde su ficha. Su precio se carga en Lista general.</p>
+            <p className="mt-3 text-xs text-muted-foreground">Si es “para genéricos”, el SKU nuevo queda tildado en todos los clientes genéricos. A los especiales se lo agregás desde su ficha. Su precio se carga en Lista general.</p>
           </CardContent>
         </Card>
       )}
@@ -200,6 +205,7 @@ export default function Skus() {
             <TableHead>Familia</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead className="text-center">Admite descuento</TableHead>
+            <TableHead className="text-center" title="Si va tildado en los clientes genéricos nuevos y cuando se crea el SKU. No cambia a los genéricos ya cargados: eso se hace desde la ficha del cliente.">Genéricos</TableHead>
             <TableHead>Peso</TableHead>
             <TableHead>Unid./pallet</TableHead>
             <TableHead>Color</TableHead>
@@ -208,7 +214,7 @@ export default function Skus() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}-${s.admite_descuento}-${s.unidades_pallet}-${s.peso}-${s.color}-${s.sinonimos}`} s={s} onGuardado={cargar} />)}
+          {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}-${s.admite_descuento}-${s.para_genericos}-${s.unidades_pallet}-${s.peso}-${s.color}-${s.sinonimos}`} s={s} onGuardado={cargar} />)}
         </TableBody>
       </Table>
     </div>
