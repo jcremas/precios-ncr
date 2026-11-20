@@ -75,7 +75,7 @@ export default function Clientes() {
           <CardContent>
             <FormCliente inicial={clienteVacio} onGuardar={crear} onCancelar={() => setNuevo(false)} />
             <p className="mt-3 text-xs text-muted-foreground">
-              Se le tildan todos los SKUs activos; después destildás en su ficha los que no se cotizan. Si es especial, en su ficha armás la primera lista a partir de la lista general.
+              Si es genérico se le tildan los SKUs marcados “Genéricos” en SKUs (los de vino); si es especial, todos los activos. Después destildás en su ficha los que no se cotizan. Si es especial, en su ficha armás la primera lista a partir de la lista general.
             </p>
           </CardContent>
         </Card>
