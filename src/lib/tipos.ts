@@ -20,6 +20,8 @@ export interface Sku {
   color: string | null
   /** Otros nombres con que lo piden los clientes, separados por coma (0009). */
   sinonimos?: string | null
+  /** Si va tildado en los clientes genéricos (0010). Por defecto solo vino. */
+  para_genericos?: boolean
 }
 
 export interface Cliente {
