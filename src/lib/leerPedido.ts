@@ -91,15 +91,24 @@ function atributos(n: string): Record<string, string> {
 function palabrasClave(n: string): string[] {
   let t = ` ${n} `
   for (const opciones of Object.values(ATRIBUTOS)) for (const [, re] of opciones) t = t.replace(new RegExp(re.source, 'g'), ' ')
-  return t.split(' ').filter((p) => p && !VACIAS.has(p) && !/^\d+$/.test(p)).map((p) => EQUIVALENTES[p] ?? p)
+  return t.split(' ').filter((p) => p && !VACIAS.has(p) && !/^\d+$/.test(p) && !(p in NUMEROS)).map((p) => EQUIVALENTES[p] ?? p)
 }
 
 /** "3.402" / "3402" -> 3402 */
 const entero = (t: string) => Number(t.replace(/[.\s]/g, ''))
 
 /** Cantidades con expresiones regulares (sobre el texto original, sin acentos). */
+/** Números dichos en palabras (dictado por voz): "tres pallets" -> "3 pallets". */
+const NUMEROS: Record<string, number> = {
+  un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10,
+  once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18,
+  diecinueve: 19, veinte: 20, veinticinco: 25, treinta: 30, cuarenta: 40, cincuenta: 50, medio: 0.5,
+}
+const numerosEnPalabras = (t: string) =>
+  t.replace(/\b([a-z]+)\b(?=\s+(?:pallets?|palets?|pals?|plts?))/g, (m, w: string) => (w in NUMEROS ? String(NUMEROS[w]) : m))
+
 function cantidades(linea: string) {
-  const n = linea.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  const n = numerosEnPalabras(linea.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase())
   const pal = n.match(/(\d+(?:[.,]\d+)?)\s*(?:pallets?|palets?|pals?|plts?|pall)\b/)
   const bot = n.match(/(\d{1,3}(?:\.\d{3})+|\d+)\s*(?:botellas?|unidades|unid|u\b|uds?\b|frascos?|envases?)/)
   return { pallets: pal ? Number(pal[1].replace(',', '.')) : null, botellas: bot ? entero(bot[1]) : null }

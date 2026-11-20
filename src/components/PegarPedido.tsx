@@ -6,6 +6,7 @@ import { copiarTabla } from '@/lib/copiar'
 import { nombreMes, precio } from '@/lib/formato'
 import { leerPedidoPorReglas, normalizar, type FilaLeida } from '@/lib/leerPedido'
 import { Button } from '@/components/ui/button'
+import Dictado from '@/components/Dictado'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -70,6 +71,7 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
   const [error, setError] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
   const [resumen, setResumen] = useState<string | null>(null)
+  const [parcial, setParcial] = useState('')
 
   useEffect(() => {
     supabase.from('skus').select('sku, descripcion, familia, color, sinonimos, unidades_pallet, estado').order('descripcion')
@@ -184,8 +186,10 @@ export default function PegarPedido({ clienteNombre, mes, precios }: { clienteNo
           <textarea id="pedido" className="min-h-32 rounded-md border p-2 text-sm" value={texto} maxLength={8000}
             onChange={(e) => setTexto(e.target.value)}
             placeholder={'3 pallets botella Burdeos Cónica Baja 750 – Verde – Boca corcho /// 3.402 botellas\n4 pallets botella Burdeos Giuliana 750 – Verde – Boca Corcho /// 4.872 botellas'} />
+          {parcial && <p className="text-sm italic text-muted-foreground">{parcial}…</p>}
           <div className="flex items-center gap-2">
             <Button onClick={leer} disabled={!texto.trim() || leyendo || !catalogo.length}>Leer pedido</Button>
+            <Dictado onParcial={setParcial} onLinea={(t) => setTexto((x) => (x.trim() ? `${x.replace(/\s+$/, '')}\n${t}` : t))} />
             {leyendo && <span className="text-sm text-muted-foreground">Consultando a la IA las líneas que no se reconocieron…</span>}
             {!leyendo && resumen && <span className="text-sm text-muted-foreground">{resumen}</span>}
             {filas.length > 0 && <Button variant="ghost" onClick={() => { setFilas([]); setResumen(null); setCopiado(false) }}>Limpiar resultado</Button>}
