@@ -128,6 +128,7 @@ export default function ClienteDetalle() {
   const [listas, setListas] = useState<ListaGeneral[]>([])
   const [editando, setEditando] = useState(false)
   const [skuNuevo, setSkuNuevo] = useState('')
+  const [verTodos, setVerTodos] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function cargar() {
@@ -153,8 +154,10 @@ export default function ClienteDetalle() {
   const porSku = useMemo(() => new Map(skus.map((s) => [s.sku, s])), [skus])
 
   // Filas: SKUs tildados + cualquier SKU con historial aunque ya no esté tildado.
+  // Con "Ver todos los SKUs" se suman los SKUs activos que nunca tuvo, para tildarlos ahí mismo.
   const filas = useMemo(() => {
     const ids = new Set([...grilla.map((g) => g.sku), ...precios.map((p) => p.sku)])
+    if (verTodos) for (const s of skus) if (s.estado === 'ACTIVO') ids.add(s.sku)
     return [...ids]
       .map((sku) => {
         const valores = new Map(precios.filter((p) => p.sku === sku).map((p) => [p.mes, Number(p.precio)]))
@@ -170,7 +173,7 @@ export default function ClienteDetalle() {
         }
       })
       .sort((a, b) => Number(b.activo) - Number(a.activo) || a.descripcion.localeCompare(b.descripcion))
-  }, [grilla, precios, meses, porSku])
+  }, [grilla, precios, meses, porSku, skus, verTodos])
 
   async function guardarCliente(d: DatosCliente) {
     const { error } = await supabase.from('clientes').update(d).eq('id', id)
@@ -240,12 +243,16 @@ export default function ClienteDetalle() {
       <div className="grid gap-3">
         <div className="flex flex-wrap items-end gap-3">
           <h2 className="mr-auto text-lg font-semibold">Historial de precios</h2>
-          <Combobox className="w-80" value={skuNuevo} onChange={setSkuNuevo} placeholder="Tildar otro SKU para este cliente…"
+          <Combobox className="w-80" value={skuNuevo} onChange={setSkuNuevo} placeholder={`Tildar otro SKU para este cliente (${disponibles.length} disponibles)…`}
             opciones={disponibles.map((s) => ({ value: String(s.sku), label: s.descripcion, detalle: String(s.sku) }))} />
           <Button variant="secondary" onClick={agregarSku} disabled={!skuNuevo}>Agregar</Button>
         </div>
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+          <input type="checkbox" checked={verTodos} onChange={(e) => setVerTodos(e.target.checked)} />
+          Ver todos los SKUs activos (también los que este cliente nunca tuvo), para tildarlos desde la tabla
+        </label>
         <p className="text-xs text-muted-foreground">
-          La columna "Se cotiza" es el mapa de SKUs: destildá los que no se le cotizan. Debajo de cada precio va la variación contra el mes anterior: <Badge variant="alerta">+30%</Badge> aumento atípico (más de {UMBRAL_AUMENTO_ATIPICO}%), <Badge variant="baja">-%</Badge> baja.
+          La columna "Se cotiza" es el mapa de SKUs: destildá los que no se le cotizan. Un SKU recién tildado se cotiza cuando tenga precio cargado (en Ajuste mensual, si es especial). Debajo de cada precio va la variación contra el mes anterior: <Badge variant="alerta">+30%</Badge> aumento atípico (más de {UMBRAL_AUMENTO_ATIPICO}%), <Badge variant="baja">-%</Badge> baja.
         </p>
         <Table>
           <TableHeader>
