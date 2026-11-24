@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { MODALIDADES, nombreModalidad, type Modalidad } from '@/lib/tipos'
 import { etiquetaNivel, useNiveles } from '@/lib/niveles'
-import { soloDatos, type DatosCliente } from '@/lib/clientes'
+import { normalizarEmails, soloDatos, type DatosCliente } from '@/lib/clientes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,6 +26,9 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
       Object.entries(soloDatos(d)).map(([k, v]) => [k, typeof v === 'string' ? v.trim() || null : v]),
     ) as DatosCliente
     if (!limpio.nombre) return setError('El nombre es obligatorio.')
+    const emails = normalizarEmails(limpio.email)
+    if ('malo' in emails) return setError(`Email de contacto inválido: "${emails.malo}". Si son varios, separalos con ;`)
+    limpio.email = emails.ok
     if (limpio.modalidad === 'GENERICO' && limpio.cotiza && limpio.nivel_id == null)
       return setError('Un cliente genérico necesita su nivel de descuento.')
     setError(await onGuardar(limpio))
@@ -72,7 +75,10 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
       {campo('marca_principal', 'Marca principal')}
       {campo('condicion_pago', 'Condiciones de pago (hasta 30 caracteres)', { maxLength: 30 })}
       {campo('contacto', 'Nombre de contacto')}
-      {campo('email', 'Email de contacto', { type: 'email' })}
+      <div className="grid gap-2">
+        {campo('email', 'Email de contacto', { placeholder: 'compras@cliente.com; otro@cliente.com' })}
+        <p className="text-xs text-muted-foreground">Podés poner varios separados con ; (van todos en el campo Para del correo).</p>
+      </div>
       <div className="flex items-center gap-2 pt-6">
         <input id="empaque_consignado" type="checkbox" checked={d.empaque_consignado} onChange={(e) => setD({ ...d, empaque_consignado: e.target.checked })} />
         <Label htmlFor="empaque_consignado">Empaque consignado</Label>

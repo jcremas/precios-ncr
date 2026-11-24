@@ -225,6 +225,7 @@ export default function EnviarListas() {
                 Podés usar {MARCAS}: se reemplazan por los datos de cada cliente (si no tiene contacto, va el nombre del cliente).
                 La tabla de precios va entre la introducción y el cierre. El cierre depende de la casilla "Empaque en consignación" de la ficha del cliente. Si el cliente no tiene condición de pago cargada, va "a convenir". Outlook no agrega tu firma sola a estos correos: escribila en el cierre.
               </p>
+              {campo('cc', 'Siempre en copia (CC), separados con ;')}
               {campo('asunto', 'Asunto')}
               {campo('saludo', 'Saludo')}
               {campo('intro', 'Introducción (antes de la tabla)', 3)}

@@ -12,6 +12,8 @@ import { nombreMes, precio } from '@/lib/formato'
 export interface LineaCorreo { sku: number; descripcion: string; precio: number; pallet?: number | null }
 
 export interface Plantilla {
+  /** Siempre en copia (CC), separados con ; */
+  cc: string
   asunto: string
   saludo: string
   intro: string
@@ -26,6 +28,7 @@ export const MARCAS = '{cliente} {contacto} {mes} {condicion_pago}'
 
 /** Textos de Javier (2026-11-24). */
 export const PLANTILLA_INICIAL: Plantilla = {
+  cc: 'hector.rossi@ncrosario.com; guillermo.rosales@ncrosario.com; comercial@ncrosario.com',
   asunto: 'Propuesta de Precios {mes} - {cliente} - Nueva Cristalería Rosario',
   saludo: 'Estimado/a {contacto}:',
   intro: 'Le hacemos llegar nuestra propuesta de precios para el mes de {mes}.',
@@ -127,11 +130,12 @@ export function destinatarios(email: string | null) {
   return (email ?? '').split(/[;,\s]+/).map((x) => x.trim()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))
 }
 
-export function armarEml(para: string[], asunto: string, texto: string, html: string) {
+export function armarEml(para: string[], asunto: string, texto: string, html: string, cc: string[] = []) {
   const limite = `----=_ncr_${Math.random().toString(36).slice(2)}`
   return [
     'X-Unsent: 1',
     ...(para.length ? [`To: ${para.join(', ')}`] : []),
+    ...(cc.length ? [`Cc: ${cc.join(', ')}`] : []),
     `Subject: ${encabezado(asunto)}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${limite}"`,
@@ -154,7 +158,7 @@ export function armarEml(para: string[], asunto: string, texto: string, html: st
 /** Correo completo de un cliente, listo para bajar. */
 export function emlDeCliente(d: DatosCorreo, p: Plantilla) {
   const { asunto, texto, html } = armarCorreo(d, p)
-  return armarEml(destinatarios(d.email), asunto, texto, html)
+  return armarEml(destinatarios(d.email), asunto, texto, html, destinatarios(p.cc))
 }
 
 /** Nombre de archivo seguro: "Lista MAY 2026 - CLIENTE.eml". */

@@ -20,6 +20,15 @@ export function soloDatos(d: DatosCliente): DatosCliente {
   return Object.fromEntries(CAMPOS.map((k) => [k, d[k]])) as DatosCliente
 }
 
+/** Emails separados por ";" (también acepta "," o espacios). Devuelve el texto
+ *  normalizado "a@x.com; b@y.com" o el primer email inválido. */
+export function normalizarEmails(t: string | null): { ok: string | null } | { malo: string } {
+  const lista = (t ?? '').split(/[;,\s]+/).map((x) => x.trim()).filter(Boolean)
+  const malo = lista.find((x) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))
+  if (malo) return { malo }
+  return { ok: lista.length ? lista.map((x) => x.toLowerCase()).join('; ') : null }
+}
+
 export function traducirError(e: unknown) {
   const m = mensajeError(e)
   if (m.includes('clientes_nombre_unico')) return 'Ya existe un cliente con ese nombre.'
