@@ -15,20 +15,47 @@ export interface Plantilla {
   asunto: string
   saludo: string
   intro: string
-  cierre: string
+  /** Cierre para clientes con empaque en consignación (clientes.empaque_consignado). */
+  cierreConsignado: string
+  /** Cierre para clientes sin empaque en consignación (pagan el empaque). */
+  cierreSinConsignar: string
 }
 
 /** Marcas que se reemplazan en cada correo. */
-export const MARCAS = '{cliente} {contacto} {mes}'
+export const MARCAS = '{cliente} {contacto} {mes} {condicion_pago}'
 
+/** Textos de Javier (2026-11-24). */
 export const PLANTILLA_INICIAL: Plantilla = {
-  asunto: 'Lista de precios {mes} - Nueva Cristalería Rosario',
+  asunto: 'Propuesta de Precios {mes} - {cliente} - Nueva Cristalería Rosario',
   saludo: 'Estimado/a {contacto}:',
-  intro: 'Le hacemos llegar la lista de precios vigente para {mes}.',
-  cierre: 'Quedamos a disposición por cualquier consulta.\n\nSaludos cordiales.',
+  intro: 'Le hacemos llegar nuestra propuesta de precios para el mes de {mes}.',
+  cierreConsignado: [
+    'Los precios no incluyen impuestos.',
+    'Condición de pago: {condicion_pago}',
+    'Lugar de entrega: a definir en conjunto con el cliente.',
+    '',
+    'El embalaje (Pallet, Marco y Chapadur) es propiedad de NCR. En caso de no efectuarse su devolución o que esta sea defectuosa, se facturará a los 60 días ff.',
+    'Recordar que para informar y coordinar retiros se debe hacer con Mauricio Bedin: mauricio.bedin@ncrosario.com',
+    '',
+    'Aguardamos vuestros comentarios.',
+    '',
+    'Saludos',
+  ].join('\n'),
+  cierreSinConsignar: [
+    'Los precios no incluyen impuestos.',
+    'Condición de pago: {condicion_pago}',
+    'Lugar de entrega: a definir en conjunto con el cliente.',
+    '',
+    'Al precio de la botella se debe sumar el precio del material de empaque (Pallet, Marco y Chapadur).',
+    '',
+    'Aguardamos vuestros comentarios.',
+    '',
+    'Saludos',
+  ].join('\n'),
 }
 
-const CLAVE = 'precios-ncr.plantilla-correo'
+// v2: textos nuevos (los guardados con la versión anterior no se usan).
+const CLAVE = 'precios-ncr.plantilla-correo.v2'
 
 /** La plantilla queda guardada en este navegador (comodidad, no es un dato del sistema). */
 export function leerPlantilla(): Plantilla {
@@ -46,6 +73,8 @@ export interface DatosCorreo {
   cliente: string
   contacto: string | null
   email: string | null
+  condicion_pago?: string | null
+  empaque_consignado?: boolean
   mes: string // 'AAAA-MM-01'
   lineas: LineaCorreo[]
 }
@@ -57,6 +86,7 @@ function completar(t: string, d: DatosCorreo) {
     .replace(/\{cliente\}/g, d.cliente)
     .replace(/\{contacto\}/g, d.contacto?.trim() || d.cliente)
     .replace(/\{mes\}/g, nombreMes(d.mes))
+    .replace(/\{condicion_pago\}/g, d.condicion_pago?.trim() || 'a convenir')
 }
 
 /** Asunto, texto simple y HTML de un correo. */
@@ -64,7 +94,7 @@ export function armarCorreo(d: DatosCorreo, p: Plantilla) {
   const asunto = completar(p.asunto, d)
   const saludo = completar(p.saludo, d)
   const intro = completar(p.intro, d)
-  const cierre = completar(p.cierre, d)
+  const cierre = completar(d.empaque_consignado ? p.cierreConsignado : p.cierreSinConsignar, d)
   const titulo = `Lista de precios ${nombreMes(d.mes)} - ${d.cliente}`
   const filas = d.lineas.map((l) => [String(l.sku), l.descripcion, precio(Number(l.precio)), l.pallet ? fmtUnidades.format(l.pallet) : ''])
   const tabla = tablaHtml(titulo, [{ titulo: 'SKU' }, { titulo: 'Producto' }, { titulo: 'Precio', derecha: true }, { titulo: 'Unid./pallet', derecha: true }], filas)
@@ -217,36 +247,4 @@ export function bajar(nombre: string, contenido: Blob | string, tipo = 'message/
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 5000)
-}
-
-// ---------------------------------------------------------------------------
-// Outlook web (Office 365): abre un correo nuevo en outlook.office.com con
-// destinatario y asunto. El cuerpo con la tabla queda COPIADO: se pega con
-// Ctrl+V (el enlace de Outlook web no acepta cuerpo con formato).
-
-export interface CorreoListo { cliente: string; para: string[]; asunto: string; texto: string; html: string }
-
-export function correoListo(d: DatosCorreo, p: Plantilla): CorreoListo {
-  return { cliente: d.cliente, para: destinatarios(d.email), ...armarCorreo(d, p) }
-}
-
-export function enlaceOutlookWeb(para: string[], asunto: string) {
-  const q = new URLSearchParams()
-  if (para.length) q.set('to', para.join(';'))
-  q.set('subject', asunto)
-  return `https://outlook.office.com/mail/deeplink/compose?${q.toString().replace(/\+/g, '%20')}`
-}
-
-/** Copia el cuerpo (con formato) y abre el correo nuevo en otra pestaña.
- *  Devuelve false si el navegador bloqueó la pestaña nueva. */
-export async function abrirEnOutlookWeb(c: CorreoListo) {
-  try {
-    await navigator.clipboard.write([new ClipboardItem({
-      'text/html': new Blob([c.html], { type: 'text/html' }),
-      'text/plain': new Blob([c.texto], { type: 'text/plain' }),
-    })])
-  } catch {
-    await navigator.clipboard.writeText(c.texto).catch(() => {})
-  }
-  return !!window.open(enlaceOutlookWeb(c.para, c.asunto), '_blank')
 }

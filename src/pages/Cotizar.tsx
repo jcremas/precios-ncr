@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { copiarTabla } from '@/lib/copiar'
-import { abrirEnOutlookWeb, bajar, correoListo, destinatarios, emlDeCliente, leerPlantilla, nombreArchivo } from '@/lib/correo'
+import { bajar, destinatarios, emlDeCliente, leerPlantilla, nombreArchivo } from '@/lib/correo'
 import { nombreMes, precio } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente, type Modalidad } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
@@ -21,7 +21,7 @@ const fmtUnidades = new Intl.NumberFormat('es-AR')
 
 export default function Cotizar() {
   const { nombre: nombreNivel } = useNiveles()
-  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel_id' | 'nro_cliente' | 'modalidad' | 'cotiza' | 'contacto' | 'email'>[]>([])
+  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel_id' | 'nro_cliente' | 'modalidad' | 'cotiza' | 'contacto' | 'email' | 'condicion_pago' | 'empaque_consignado'>[]>([])
   const [id, setId] = useState('')
   const [modalidad, setModalidad] = useState<Modalidad | ''>('')
   const [meses, setMeses] = useState<string[]>([])
@@ -30,11 +30,10 @@ export default function Cotizar() {
   const [aviso, setAviso] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
   const [verPedido, setVerPedido] = useState(false)
-  const [correoBajado, setCorreoBajado] = useState(false)
-  const [webAbierto, setWebAbierto] = useState<'si' | 'bloqueado' | null>(null)
+  const [correoListo, setCorreoListo] = useState(false)
 
   useEffect(() => {
-    supabase.from('clientes').select('id, nombre, nivel_id, nro_cliente, modalidad, cotiza, contacto, email').eq('activo', true).order('nombre')
+    supabase.from('clientes').select('id, nombre, nivel_id, nro_cliente, modalidad, cotiza, contacto, email, condicion_pago, empaque_consignado').eq('activo', true).order('nombre')
       .then(({ data }) => setClientes(data ?? []))
   }, [])
 
@@ -66,8 +65,7 @@ export default function Cotizar() {
   useEffect(() => {
     setLineas([])
     setCopiado(false)
-    setCorreoBajado(false)
-    setWebAbierto(null)
+    setCorreoListo(false)
     if (!cliente || !mes || !meses.includes(mes)) return
     let vigente = true
     Promise.all([cotizar(cliente, mes), supabase.from('skus').select('sku, unidades_pallet')]).then(([{ lineas, error }, s]) => {
@@ -102,18 +100,9 @@ export default function Cotizar() {
   /** Baja un correo (.eml) que Outlook abre como mensaje nuevo, listo para Enviar. */
   function correo() {
     if (!cliente) return
-    const eml = emlDeCliente({ cliente: cliente.nombre, contacto: cliente.contacto, email: cliente.email, mes, lineas }, leerPlantilla())
+    const eml = emlDeCliente({ cliente: cliente.nombre, contacto: cliente.contacto, email: cliente.email, condicion_pago: cliente.condicion_pago, empaque_consignado: cliente.empaque_consignado, mes, lineas }, leerPlantilla())
     bajar(nombreArchivo(cliente.nombre, mes), eml)
-    setCorreoBajado(true)
-    setWebAbierto(null)
-  }
-
-  /** Abre un correo nuevo en Outlook web y deja el cuerpo copiado para pegar. */
-  async function outlookWeb() {
-    if (!cliente) return
-    const ok = await abrirEnOutlookWeb(correoListo({ cliente: cliente.nombre, contacto: cliente.contacto, email: cliente.email, mes, lineas }, leerPlantilla()))
-    setWebAbierto(ok ? 'si' : 'bloqueado')
-    setCorreoBajado(false)
+    setCorreoListo(true)
   }
 
   return (
@@ -161,19 +150,10 @@ export default function Cotizar() {
             <Button variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓ Pegalo en el correo' : 'Copiar para enviar'}</Button>
             <Button variant="outline" onClick={correo}
               title={cliente && destinatarios(cliente.email).length ? `Para: ${destinatarios(cliente.email).join(', ')}` : 'El cliente no tiene email cargado: completalo en Outlook'}>
-              {correoBajado ? 'Correo bajado ✓ Abrilo' : 'Correo para Outlook'}
+              {correoListo ? 'Correo bajado ✓ Abrilo' : 'Correo para Outlook'}
             </Button>
-            <Button variant="outline" onClick={outlookWeb}>{webAbierto === 'si' ? 'Abierto ✓ Pegá con Ctrl+V' : 'Outlook web'}</Button>
           </div>
-          {webAbierto && (
-            <p className="text-sm text-muted-foreground">
-              {webAbierto === 'si'
-                ? 'Se abrió un correo nuevo en Outlook web (otra pestaña) con el destinatario y el asunto. Hacé clic en el cuerpo del mensaje, pegá con Ctrl+V (saludo, tabla y cierre) y apretá Enviar.'
-                : 'El navegador bloqueó la pestaña nueva: permití las ventanas emergentes para esta página (ícono en la barra de direcciones) y volvé a apretar "Outlook web".'}
-              {cliente && !destinatarios(cliente.email).length && ' Este cliente no tiene email cargado: escribilo en el campo Para.'}
-            </p>
-          )}
-          {correoBajado && (
+          {correoListo && (
             <p className="text-sm text-muted-foreground">
               Abrí el archivo que bajó el navegador: se abre en Outlook como mensaje nuevo, listo para revisar y apretar Enviar.
               {cliente && !destinatarios(cliente.email).length && ' Este cliente no tiene email cargado: escribilo en el campo Para.'}
