@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { mensajeError } from '@/lib/datos'
-import { mesActual, nombreMes } from '@/lib/formato'
+import { mensajeError, traerTodo } from '@/lib/datos'
+import { nombreMes } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
 import {
@@ -20,15 +20,36 @@ type ClienteEnvio = Pick<Cliente, 'id' | 'nombre' | 'nro_cliente' | 'modalidad' 
 
 interface Resultado { armados: number; sinPrecios: string[]; sinEmail: string[]; errores: string[] }
 
-/** Últimos 12 meses, del más nuevo al más viejo ('AAAA-MM-01'). */
-function ultimosMeses() {
-  const [a, m] = mesActual().split('-').map(Number)
-  return Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(a, m - 1 - i, 1)).toISOString().slice(0, 10))
+/** Meses con lista de cada cliente (id -> meses, del más nuevo al más viejo).
+ *  Usa meses_cotizables_todos() (0011); si todavía no se corrió, pregunta
+ *  cliente por cliente con meses_cotizables() (0007), que es más lento. */
+async function mesesPorCliente(ids: number[]): Promise<Map<number, string[]>> {
+  const mapa = new Map<number, string[]>()
+  const agregar = (id: number, mes: string) => {
+    const l = mapa.get(id)
+    if (l) l.push(mes); else mapa.set(id, [mes])
+  }
+  try {
+    const filas = await traerTodo<{ cliente_id: number; mes: string }>((d, h) =>
+      supabase.rpc('meses_cotizables_todos').order('cliente_id').order('mes').range(d, h))
+    for (const f of filas) agregar(f.cliente_id, f.mes)
+  } catch {
+    const cola = [...ids]
+    await Promise.all(Array.from({ length: 8 }, async () => {
+      for (let id = cola.shift(); id != null; id = cola.shift()) {
+        const { data } = await supabase.rpc('meses_cotizables', { p_cliente_id: id })
+        for (const x of (data ?? []) as { mes: string }[]) agregar(id, x.mes)
+      }
+    }))
+  }
+  for (const l of mapa.values()) l.sort().reverse()
+  return mapa
 }
 
 export default function EnviarListas() {
   const { niveles, nombre: nombreNivel } = useNiveles()
   const [clientes, setClientes] = useState<ClienteEnvio[]>([])
+  const [meses, setMeses] = useState<Map<number, string[]> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [modalidad, setModalidad] = useState('')
   const [nivel, setNivel] = useState('')
@@ -45,26 +66,47 @@ export default function EnviarListas() {
     supabase.from('clientes').select('id, nombre, nro_cliente, modalidad, nivel_id, contacto, email')
       .eq('activo', true).eq('cotiza', true).order('nombre').order('id')
       .then(({ data, error }) => {
-        if (error) setError(mensajeError(error))
-        else setClientes((data ?? []) as ClienteEnvio[])
+        if (error) return setError(mensajeError(error))
+        const lista = (data ?? []) as ClienteEnvio[]
+        setClientes(lista)
+        mesesPorCliente(lista.map((c) => c.id)).then(setMeses, (e) => setError(mensajeError(e)))
       })
   }, [])
 
+  /** Todos los meses con alguna lista, del más nuevo al más viejo. */
+  const mesesDisponibles = useMemo(
+    () => [...new Set([...(meses?.values() ?? [])].flat())].sort().reverse(),
+    [meses])
+  /** Mes de la lista que se manda a ese cliente (el elegido o su último), o null si no tiene. */
+  const mesDe = (id: number) => {
+    const l = meses?.get(id) ?? []
+    return mes ? (l.includes(mes) ? mes : null) : (l[0] ?? null)
+  }
+  const cuantos = (m: string) => clientes.filter((c) => meses?.get(c.id)?.includes(m)).length
+  function cambiarMes(m: string) {
+    setMes(m)
+    setTildados(new Set())
+    setResultado(null)
+  }
+
   const f = filtro.trim().toUpperCase()
   const visibles = useMemo(() => clientes.filter((c) =>
+    (!mes || (meses?.get(c.id) ?? []).includes(mes)) &&
     (!modalidad || c.modalidad === modalidad) &&
     (!nivel || String(c.nivel_id) === nivel) &&
     (!soloConEmail || destinatarios(c.email).length > 0) &&
     (!f || c.nombre.toUpperCase().includes(f) || (c.nro_cliente ?? '').toUpperCase().includes(f))),
-  [clientes, modalidad, nivel, soloConEmail, f])
+  [clientes, meses, mes, modalidad, nivel, soloConEmail, f])
 
-  const todosVisiblesTildados = visibles.length > 0 && visibles.every((c) => tildados.has(c.id))
+  const tildables = visibles.filter((c) => mesDe(c.id))
+  const todosVisiblesTildados = tildables.length > 0 && tildables.every((c) => tildados.has(c.id))
   function tildarVisibles(si: boolean) {
     const n = new Set(tildados)
-    for (const c of visibles) if (si) n.add(c.id); else n.delete(c.id)
+    for (const c of tildables) if (si) n.add(c.id); else n.delete(c.id)
     setTildados(n)
   }
   function tildar(id: number, si: boolean) {
+    if (si && !mesDe(id)) return
     const n = new Set(tildados)
     if (si) n.add(id); else n.delete(id)
     setTildados(n)
@@ -88,7 +130,7 @@ export default function EnviarListas() {
     const cola = [...elegidos]
     async function trabajar() {
       for (let c = cola.shift(); c; c = cola.shift()) {
-        const { data, error } = await supabase.rpc('cotizar', { p_cliente_id: c.id, p_mes: mes || null })
+        const { data, error } = await supabase.rpc('cotizar', { p_cliente_id: c.id, p_mes: mesDe(c.id) })
         hechos++
         setAvance(`Armando ${hechos} de ${elegidos.length}…`)
         if (error) { r.errores.push(`${c.nombre}: ${mensajeError(error)}`); continue }
@@ -131,16 +173,18 @@ export default function EnviarListas() {
           <CardDescription>
             Tildá los clientes y apretá "Bajar correos". La app arma un correo por cliente (para su email, con asunto y la tabla de precios) y los baja juntos en un .zip.
             Abrí el .zip, hacé doble clic en cada correo: se abre en Outlook como mensaje nuevo, lo revisás y apretás Enviar. La app no envía nada sola y no quedan en Borradores salvo que los cierres guardándolos.
-            Los clientes NO COTIZA no aparecen.
+            En "Precios de" elegí un mes para ver solo los clientes que tienen lista ese mes, o "La última lista de cada cliente" para verlos a todos con el mes de su última lista. Los clientes NO COTIZA no aparecen.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="grid gap-1">
               <Label htmlFor="mes">Precios de</Label>
-              <Select id="mes" className="w-56" value={mes} onChange={(e) => setMes(e.target.value)}>
-                <option value="">El último mes de cada cliente</option>
-                {ultimosMeses().map((m) => <option key={m} value={m}>{nombreMes(m)}</option>)}
+              <Select id="mes" className="w-72" value={mes} onChange={(e) => cambiarMes(e.target.value)}>
+                <option value="">La última lista de cada cliente</option>
+                {mesesDisponibles.map((m) => (
+                  <option key={m} value={m}>Solo {nombreMes(m)} ({cuantos(m)} cliente{cuantos(m) === 1 ? '' : 's'})</option>
+                ))}
               </Select>
             </div>
             <div className="grid gap-1">
@@ -197,7 +241,7 @@ export default function EnviarListas() {
                   : 'No se armó ningún correo.'}
               </p>
               {resultado.sinEmail.length > 0 && <p className="text-amber-800">Sin email cargado (escribilo en el campo Para de Outlook, o cargalo en la ficha del cliente): {resultado.sinEmail.join(', ')}.</p>}
-              {resultado.sinPrecios.length > 0 && <p className="text-amber-800">Sin precios {mes ? `en ${nombreMes(mes)}` : 'cargados'} (no se armó correo): {resultado.sinPrecios.join(', ')}.</p>}
+              {resultado.sinPrecios.length > 0 && <p className="text-amber-800">Sin SKUs tildados con precio (no se armó correo): {resultado.sinPrecios.join(', ')}.</p>}
               {resultado.errores.length > 0 && <p className="text-destructive">Con error: {resultado.errores.join('; ')}.</p>}
             </div>
           )}
@@ -214,6 +258,7 @@ export default function EnviarListas() {
             <TableHead>Cliente ({visibles.length})</TableHead>
             <TableHead>Código</TableHead>
             <TableHead>Tipo</TableHead>
+            <TableHead>{mes ? 'Lista' : 'Última lista'}</TableHead>
             <TableHead>Contacto</TableHead>
             <TableHead>Email</TableHead>
           </TableRow>
@@ -221,14 +266,16 @@ export default function EnviarListas() {
         <TableBody>
           {visibles.map((c) => {
             const para = destinatarios(c.email)
+            const m = mesDe(c.id)
             return (
-              <TableRow key={c.id} className="cursor-pointer" onClick={() => tildar(c.id, !tildados.has(c.id))}>
+              <TableRow key={c.id} className={m ? 'cursor-pointer' : 'text-muted-foreground'} onClick={() => tildar(c.id, !tildados.has(c.id))}>
                 <TableCell>
-                  <input type="checkbox" aria-label={`Tildar ${c.nombre}`} checked={tildados.has(c.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => tildar(c.id, e.target.checked)} />
+                  <input type="checkbox" aria-label={`Tildar ${c.nombre}`} disabled={!m} checked={tildados.has(c.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => tildar(c.id, e.target.checked)} />
                 </TableCell>
                 <TableCell>{c.nombre}</TableCell>
                 <TableCell className="font-mono text-xs">{c.nro_cliente}</TableCell>
                 <TableCell className="whitespace-nowrap">{nombreModalidad(c.modalidad)}{c.nivel_id != null ? ` · ${nombreNivel(c.nivel_id)}` : ''}</TableCell>
+                <TableCell className="whitespace-nowrap">{m ? nombreMes(m) : meses ? <Badge variant="outline">sin lista</Badge> : '…'}</TableCell>
                 <TableCell>{c.contacto}</TableCell>
                 <TableCell>{para.length ? para.join(', ') : <Badge variant="outline">sin email</Badge>}</TableCell>
               </TableRow>
