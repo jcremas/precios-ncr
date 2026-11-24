@@ -5,8 +5,8 @@ import { nombreMes } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
 import {
-  MARCAS, PLANTILLA_INICIAL, armarZip, bajar, destinatarios, emlDeCliente, guardarPlantilla, leerPlantilla, nombreArchivo,
-  type LineaCorreo, type Plantilla,
+  MARCAS, PLANTILLA_INICIAL, abrirEnOutlookWeb, armarZip, bajar, correoListo, destinatarios, emlDeCliente, guardarPlantilla, leerPlantilla, nombreArchivo,
+  type CorreoListo, type LineaCorreo, type Plantilla,
 } from '@/lib/correo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 type ClienteEnvio = Pick<Cliente, 'id' | 'nombre' | 'nro_cliente' | 'modalidad' | 'nivel_id' | 'contacto' | 'email'>
 
-interface Resultado { armados: number; sinPrecios: string[]; sinEmail: string[]; errores: string[] }
+interface Resultado { modo: 'eml' | 'web'; armados: number; sinPrecios: string[]; sinEmail: string[]; errores: string[] }
 
 /** Meses con lista de cada cliente (id -> meses, del más nuevo al más viejo).
  *  Usa meses_cotizables_todos() (0011); si todavía no se corrió, pregunta
@@ -61,6 +61,9 @@ export default function EnviarListas() {
   const [verTexto, setVerTexto] = useState(false)
   const [avance, setAvance] = useState<string | null>(null)
   const [resultado, setResultado] = useState<Resultado | null>(null)
+  /** Correos preparados para abrir de a uno en Outlook web. */
+  const [web, setWeb] = useState<(CorreoListo & { abierto: boolean })[]>([])
+  const [bloqueado, setBloqueado] = useState(false)
 
   useEffect(() => {
     supabase.from('clientes').select('id, nombre, nro_cliente, modalidad, nivel_id, contacto, email')
@@ -87,6 +90,7 @@ export default function EnviarListas() {
     setMes(m)
     setTildados(new Set())
     setResultado(null)
+    setWeb([])
   }
 
   const f = filtro.trim().toUpperCase()
@@ -116,15 +120,19 @@ export default function EnviarListas() {
     guardarPlantilla(p)
   }
 
-  async function armar() {
+  /** 'eml': baja los correos (.zip). 'web': los prepara para abrirlos de a uno en Outlook web. */
+  async function armar(modo: 'eml' | 'web') {
     const elegidos = clientes.filter((c) => tildados.has(c.id))
     if (!elegidos.length) return
     setResultado(null)
+    setWeb([])
+    setBloqueado(false)
     setAvance(`Armando 0 de ${elegidos.length}…`)
     const { data: skus } = await supabase.from('skus').select('sku, unidades_pallet')
     const pallet = new Map((skus ?? []).map((x) => [x.sku as number, x.unidades_pallet as number | null]))
     const archivos: { nombre: string; contenido: string }[] = []
-    const r: Resultado = { armados: 0, sinPrecios: [], sinEmail: [], errores: [] }
+    const listos: CorreoListo[] = []
+    const r: Resultado = { modo, armados: 0, sinPrecios: [], sinEmail: [], errores: [] }
     let hechos = 0
     // De a 4 clientes a la vez, para no saturar la base.
     const cola = [...elegidos]
@@ -138,16 +146,17 @@ export default function EnviarListas() {
         if (!filas.length) { r.sinPrecios.push(c.nombre); continue }
         const lineas = filas.map((l) => ({ ...l, pallet: pallet.get(l.sku) ?? null }))
         const mesCorreo = filas[0].mes
-        archivos.push({
-          nombre: nombreArchivo(c.nombre, mesCorreo),
-          contenido: emlDeCliente({ cliente: c.nombre, contacto: c.contacto, email: c.email, mes: mesCorreo, lineas }, plantilla),
-        })
+        const datos = { cliente: c.nombre, contacto: c.contacto, email: c.email, mes: mesCorreo, lineas }
+        if (modo === 'web') listos.push(correoListo(datos, plantilla))
+        else archivos.push({ nombre: nombreArchivo(c.nombre, mesCorreo), contenido: emlDeCliente(datos, plantilla) })
         r.armados++
         if (!destinatarios(c.email).length) r.sinEmail.push(c.nombre)
       }
     }
     await Promise.all(Array.from({ length: 4 }, trabajar))
     archivos.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    listos.sort((a, b) => a.cliente.localeCompare(b.cliente, 'es'))
+    setWeb(listos.map((x) => ({ ...x, abierto: false })))
     if (archivos.length === 1) bajar(archivos[0].nombre, archivos[0].contenido)
     else if (archivos.length > 1) bajar(`Listas de precios ${mes ? nombreMes(mes) : new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.zip`, armarZip(archivos))
     r.sinPrecios.sort()
@@ -155,6 +164,13 @@ export default function EnviarListas() {
     setAvance(null)
     setResultado(r)
   }
+
+  async function abrirWeb(i: number) {
+    const ok = await abrirEnOutlookWeb(web[i])
+    setBloqueado(!ok)
+    if (ok) setWeb((w) => w.map((x, j) => (j === i ? { ...x, abierto: true } : x)))
+  }
+  const siguiente = web.findIndex((x) => !x.abierto)
 
   const campo = (k: keyof Plantilla, titulo: string, filas = 1) => (
     <div className="grid gap-1">
@@ -171,8 +187,8 @@ export default function EnviarListas() {
         <CardHeader>
           <CardTitle>Enviar listas de precios por Outlook</CardTitle>
           <CardDescription>
-            Tildá los clientes y apretá "Bajar correos". La app arma un correo por cliente (para su email, con asunto y la tabla de precios) y los baja juntos en un .zip.
-            Abrí el .zip, hacé doble clic en cada correo: se abre en Outlook como mensaje nuevo, lo revisás y apretás Enviar. La app no envía nada sola y no quedan en Borradores salvo que los cierres guardándolos.
+            Tildá los clientes. La app arma un correo por cliente (para su email, con asunto y la tabla de precios); vos lo revisás y apretás Enviar, la app no envía nada sola.
+            "Preparar para Outlook web": los abrís de a uno en Outlook web y pegás el cuerpo con Ctrl+V. "Bajar correos (.eml)": un .zip para abrir con doble clic en Outlook de escritorio.
             En "Precios de" elegí un mes para ver solo los clientes que tienen lista ese mes, o "La última lista de cada cliente" para verlos a todos con el mes de su última lista. Los clientes NO COTIZA no aparecen.
           </CardDescription>
         </CardHeader>
@@ -211,8 +227,11 @@ export default function EnviarListas() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={armar} disabled={!tildados.size || !!avance}>
-              {avance ?? `Bajar ${tildados.size} correo${tildados.size === 1 ? '' : 's'}`}
+            <Button onClick={() => armar('web')} disabled={!tildados.size || !!avance}>
+              {avance ?? `Preparar ${tildados.size} para Outlook web`}
+            </Button>
+            <Button variant="outline" onClick={() => armar('eml')} disabled={!tildados.size || !!avance}>
+              Bajar {tildados.size} correo{tildados.size === 1 ? '' : 's'} (.eml)
             </Button>
             {tildados.size > 0 && !avance && <Button variant="ghost" onClick={() => setTildados(new Set())}>Destildar todos</Button>}
             <Button variant={verTexto ? 'secondary' : 'outline'} className="ml-auto" onClick={() => setVerTexto(!verTexto)}>Texto del correo</Button>
@@ -236,9 +255,11 @@ export default function EnviarListas() {
           {resultado && (
             <div className="grid gap-1 rounded-md bg-muted p-3 text-sm">
               <p className="font-medium">
-                {resultado.armados
-                  ? `Listo: ${resultado.armados} correo${resultado.armados === 1 ? '' : 's'} bajado${resultado.armados === 1 ? '' : 's'}. ${resultado.armados > 1 ? 'Abrí el .zip y hacé doble clic en cada uno.' : 'Abrilo con doble clic.'}`
-                  : 'No se armó ningún correo.'}
+                {!resultado.armados
+                  ? 'No se armó ningún correo.'
+                  : resultado.modo === 'web'
+                    ? `Listo: ${resultado.armados} correo${resultado.armados === 1 ? '' : 's'} para abrir en Outlook web (abajo).`
+                    : `Listo: ${resultado.armados} correo${resultado.armados === 1 ? '' : 's'} bajado${resultado.armados === 1 ? '' : 's'}. ${resultado.armados > 1 ? 'Abrí el .zip y hacé doble clic en cada uno.' : 'Abrilo con doble clic.'}`}
               </p>
               {resultado.sinEmail.length > 0 && <p className="text-amber-800">Sin email cargado (escribilo en el campo Para de Outlook, o cargalo en la ficha del cliente): {resultado.sinEmail.join(', ')}.</p>}
               {resultado.sinPrecios.length > 0 && <p className="text-amber-800">Sin SKUs tildados con precio (no se armó correo): {resultado.sinPrecios.join(', ')}.</p>}
@@ -248,6 +269,38 @@ export default function EnviarListas() {
           {error && <p className="text-sm text-destructive">{error}</p>}
         </CardContent>
       </Card>
+
+      {web.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Abrir en Outlook web ({web.filter((x) => x.abierto).length} de {web.length})</CardTitle>
+            <CardDescription>
+              De a uno: cada botón abre un correo nuevo en Outlook web (otra pestaña) con el destinatario y el asunto, y deja copiado el saludo, la tabla y el cierre.
+              En la pestaña nueva hacé clic en el cuerpo del mensaje, pegá con Ctrl+V y apretá Enviar. Después volvé a esta pestaña y seguí con el siguiente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {siguiente >= 0
+              ? <div><Button onClick={() => abrirWeb(siguiente)}>Abrir siguiente: {web[siguiente].cliente}</Button></div>
+              : <p className="text-sm font-medium text-green-700">Abriste todos los correos ✓</p>}
+            {bloqueado && <p className="text-sm text-amber-800">El navegador bloqueó la pestaña nueva: permití las ventanas emergentes para esta página (ícono en la barra de direcciones) y volvé a apretar el botón.</p>}
+            <Table>
+              <TableBody>
+                {web.map((x, i) => (
+                  <TableRow key={x.cliente + i}>
+                    <TableCell className="w-8">{x.abierto ? '✓' : ''}</TableCell>
+                    <TableCell>{x.cliente}</TableCell>
+                    <TableCell>{x.para.length ? x.para.join(', ') : <Badge variant="outline">sin email</Badge>}</TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant={x.abierto ? 'ghost' : 'outline'} onClick={() => abrirWeb(i)}>{x.abierto ? 'Abrir de nuevo' : 'Abrir'}</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Table>
         <TableHeader>

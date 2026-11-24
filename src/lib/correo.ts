@@ -218,3 +218,35 @@ export function bajar(nombre: string, contenido: Blob | string, tipo = 'message/
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
+
+// ---------------------------------------------------------------------------
+// Outlook web (Office 365): abre un correo nuevo en outlook.office.com con
+// destinatario y asunto. El cuerpo con la tabla queda COPIADO: se pega con
+// Ctrl+V (el enlace de Outlook web no acepta cuerpo con formato).
+
+export interface CorreoListo { cliente: string; para: string[]; asunto: string; texto: string; html: string }
+
+export function correoListo(d: DatosCorreo, p: Plantilla): CorreoListo {
+  return { cliente: d.cliente, para: destinatarios(d.email), ...armarCorreo(d, p) }
+}
+
+export function enlaceOutlookWeb(para: string[], asunto: string) {
+  const q = new URLSearchParams()
+  if (para.length) q.set('to', para.join(';'))
+  q.set('subject', asunto)
+  return `https://outlook.office.com/mail/deeplink/compose?${q.toString().replace(/\+/g, '%20')}`
+}
+
+/** Copia el cuerpo (con formato) y abre el correo nuevo en otra pestaña.
+ *  Devuelve false si el navegador bloqueó la pestaña nueva. */
+export async function abrirEnOutlookWeb(c: CorreoListo) {
+  try {
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([c.html], { type: 'text/html' }),
+      'text/plain': new Blob([c.texto], { type: 'text/plain' }),
+    })])
+  } catch {
+    await navigator.clipboard.writeText(c.texto).catch(() => {})
+  }
+  return !!window.open(enlaceOutlookWeb(c.para, c.asunto), '_blank')
+}
