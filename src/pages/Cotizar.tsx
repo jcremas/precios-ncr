@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { copiarTabla } from '@/lib/copiar'
+import { bajar, destinatarios, emlDeCliente, leerPlantilla, nombreArchivo } from '@/lib/correo'
 import { nombreMes, precio } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente, type Modalidad } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
@@ -20,7 +21,7 @@ const fmtUnidades = new Intl.NumberFormat('es-AR')
 
 export default function Cotizar() {
   const { nombre: nombreNivel } = useNiveles()
-  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel_id' | 'nro_cliente' | 'modalidad' | 'cotiza'>[]>([])
+  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel_id' | 'nro_cliente' | 'modalidad' | 'cotiza' | 'contacto' | 'email'>[]>([])
   const [id, setId] = useState('')
   const [modalidad, setModalidad] = useState<Modalidad | ''>('')
   const [meses, setMeses] = useState<string[]>([])
@@ -29,9 +30,10 @@ export default function Cotizar() {
   const [aviso, setAviso] = useState<string | null>(null)
   const [copiado, setCopiado] = useState(false)
   const [verPedido, setVerPedido] = useState(false)
+  const [correoListo, setCorreoListo] = useState(false)
 
   useEffect(() => {
-    supabase.from('clientes').select('id, nombre, nivel_id, nro_cliente, modalidad, cotiza').eq('activo', true).order('nombre')
+    supabase.from('clientes').select('id, nombre, nivel_id, nro_cliente, modalidad, cotiza, contacto, email').eq('activo', true).order('nombre')
       .then(({ data }) => setClientes(data ?? []))
   }, [])
 
@@ -63,6 +65,7 @@ export default function Cotizar() {
   useEffect(() => {
     setLineas([])
     setCopiado(false)
+    setCorreoListo(false)
     if (!cliente || !mes || !meses.includes(mes)) return
     let vigente = true
     Promise.all([cotizar(cliente, mes), supabase.from('skus').select('sku, unidades_pallet')]).then(([{ lineas, error }, s]) => {
@@ -92,6 +95,14 @@ export default function Cotizar() {
       ([sku, desc, p, u]) => [sku, desc, p, u ? `${u} u/pallet` : null].filter(Boolean).join(' · '),
     )
     setCopiado(true)
+  }
+
+  /** Baja un correo (.eml) que Outlook abre como mensaje nuevo, listo para Enviar. */
+  function correo() {
+    if (!cliente) return
+    const eml = emlDeCliente({ cliente: cliente.nombre, contacto: cliente.contacto, email: cliente.email, mes, lineas }, leerPlantilla())
+    bajar(nombreArchivo(cliente.nombre, mes), eml)
+    setCorreoListo(true)
   }
 
   return (
@@ -137,7 +148,18 @@ export default function Cotizar() {
             <span className="text-sm text-muted-foreground">Precios de {nombreMes(lineas[0].mes)} · {lineas.length} SKU(s)</span>
             <Button className="ml-auto" variant={verPedido ? 'secondary' : 'outline'} onClick={() => setVerPedido(!verPedido)}>Pegar pedido</Button>
             <Button variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓ Pegalo en el correo' : 'Copiar para enviar'}</Button>
+            <Button variant="outline" onClick={correo}
+              title={cliente && destinatarios(cliente.email).length ? `Para: ${destinatarios(cliente.email).join(', ')}` : 'El cliente no tiene email cargado: completalo en Outlook'}>
+              {correoListo ? 'Correo bajado ✓ Abrilo' : 'Correo para Outlook'}
+            </Button>
           </div>
+          {correoListo && (
+            <p className="text-sm text-muted-foreground">
+              Abrí el archivo que bajó el navegador: se abre en Outlook como mensaje nuevo, listo para revisar y apretar Enviar.
+              {cliente && !destinatarios(cliente.email).length && ' Este cliente no tiene email cargado: escribilo en el campo Para.'}
+              {' '}El texto del correo se cambia en Enviar listas.
+            </p>
+          )}
           {verPedido && cliente && <PegarPedido clienteNombre={cliente.nombre} mes={mes} precios={lineas} />}
           <Table>
             <TableHeader>
