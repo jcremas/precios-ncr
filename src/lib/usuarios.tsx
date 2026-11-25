@@ -3,13 +3,15 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
 
 /** Un usuario de la app (tabla usuarios_autorizados). */
-export interface Usuario { email: string; nombre: string | null; es_admin: boolean }
+export interface Usuario { email: string; nombre: string | null; es_admin: boolean; cambiar_clave: boolean }
 
 interface Ctx {
   /** Email del usuario logueado (en minúsculas). */
   yo: string
   /** Si el usuario logueado es administrador (edita lista general, SKUs y niveles). */
   esAdmin: boolean
+  /** Tiene la contraseña temporal: la app lo manda a Mi cuenta a cambiarla (0014). */
+  debeCambiarClave: boolean
   usuarios: Usuario[]
   /** Nombre corto de un usuario por su email ("Javier"); si no tiene nombre, el email. */
   nombreDe: (email: string | null | undefined) => string
@@ -19,7 +21,7 @@ interface Ctx {
 }
 
 const UsuariosCtx = createContext<Ctx>({
-  yo: '', esAdmin: false, usuarios: [], nombreDe: (e) => e ?? '', puedeEditar: () => false, recargar: async () => {},
+  yo: '', esAdmin: false, debeCambiarClave: false, usuarios: [], nombreDe: (e) => e ?? '', puedeEditar: () => false, recargar: async () => {},
 })
 
 export function UsuariosProvider({ children }: { children: ReactNode }) {
@@ -34,13 +36,14 @@ export function UsuariosProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase.from('usuarios_autorizados').select('*').order('creado_en')
     const filas = (data ?? []) as Partial<Usuario>[]
     setSinMultiusuario(filas.length > 0 && filas.every((u) => u.es_admin === undefined))
-    setUsuarios(filas.map((u) => ({ email: u.email ?? '', nombre: u.nombre ?? null, es_admin: !!u.es_admin })))
+    setUsuarios(filas.map((u) => ({ email: u.email ?? '', nombre: u.nombre ?? null, es_admin: !!u.es_admin, cambiar_clave: !!u.cambiar_clave })))
   }, [])
   useEffect(() => {
     if (yo) recargar()
   }, [yo, recargar])
 
   const esAdmin = sinMultiusuario || usuarios.some((u) => u.email === yo && u.es_admin)
+  const debeCambiarClave = usuarios.some((u) => u.email === yo && u.cambiar_clave)
   const nombreDe = (email: string | null | undefined) => {
     if (!email) return ''
     return usuarios.find((u) => u.email === email)?.nombre || email
@@ -48,7 +51,7 @@ export function UsuariosProvider({ children }: { children: ReactNode }) {
   const puedeEditar = (dueno: string | null | undefined) => (dueno === undefined ? true : dueno === yo)
 
   return (
-    <UsuariosCtx.Provider value={{ yo, esAdmin, usuarios, nombreDe, puedeEditar, recargar }}>
+    <UsuariosCtx.Provider value={{ yo, esAdmin, debeCambiarClave, usuarios, nombreDe, puedeEditar, recargar }}>
       {children}
     </UsuariosCtx.Provider>
   )
