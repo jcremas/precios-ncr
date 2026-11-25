@@ -31,8 +31,9 @@ const SECCIONES = [
 
 function Layout() {
   const { session } = useAuth()
-  const { esAdmin, nombreDe, yo, debeCambiarClave } = useUsuarios()
+  const { esAdmin, nombreDe, yo, debeCambiarClave, noAutorizado } = useUsuarios()
   const { pathname } = useLocation()
+  if (noAutorizado) return <NoAutorizado email={session?.user.email ?? ''} />
   // Con la contraseña temporal, primero hay que cambiarla.
   if (debeCambiarClave && pathname !== '/cuenta') return <Navigate to="/cuenta" replace />
   return (
@@ -65,6 +66,19 @@ function Layout() {
       <main className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
       </main>
+    </div>
+  )
+}
+
+function NoAutorizado({ email }: { email: string }) {
+  return (
+    <div className="mx-auto max-w-xl p-8">
+      <h1 className="mb-2 text-xl font-semibold">Usuario sin acceso</h1>
+      <p className="mb-4 text-muted-foreground">
+        Entraste como <strong>{email}</strong>, pero ese email no está autorizado en Precios NCR, así que no ve ningún dato.
+        Salí y entrá con tu email autorizado, o pedile al administrador que te agregue.
+      </p>
+      <Button onClick={() => supabase.auth.signOut()}><LogOut /> Salir</Button>
     </div>
   )
 }
