@@ -12,6 +12,8 @@ interface Ctx {
   esAdmin: boolean
   /** Tiene la contraseña temporal: la app lo manda a Mi cuenta a cambiarla (0014). */
   debeCambiarClave: boolean
+  /** Ya se leyó la tabla y el email logueado no está autorizado (no ve nada). */
+  noAutorizado: boolean
   usuarios: Usuario[]
   /** Nombre corto de un usuario por su email ("Javier"); si no tiene nombre, el email. */
   nombreDe: (email: string | null | undefined) => string
@@ -21,7 +23,7 @@ interface Ctx {
 }
 
 const UsuariosCtx = createContext<Ctx>({
-  yo: '', esAdmin: false, debeCambiarClave: false, usuarios: [], nombreDe: (e) => e ?? '', puedeEditar: () => false, recargar: async () => {},
+  yo: '', esAdmin: false, debeCambiarClave: false, noAutorizado: false, usuarios: [], nombreDe: (e) => e ?? '', puedeEditar: () => false, recargar: async () => {},
 })
 
 export function UsuariosProvider({ children }: { children: ReactNode }) {
@@ -31,11 +33,13 @@ export function UsuariosProvider({ children }: { children: ReactNode }) {
   // Hasta correr la migración 0013 no existe es_admin ni clientes.dueno:
   // en ese caso la app sigue como antes (todos editan todo).
   const [sinMultiusuario, setSinMultiusuario] = useState(false)
+  const [cargado, setCargado] = useState(false)
 
   const recargar = useCallback(async () => {
     const { data } = await supabase.from('usuarios_autorizados').select('*').order('creado_en')
     const filas = (data ?? []) as Partial<Usuario>[]
     setSinMultiusuario(filas.length > 0 && filas.every((u) => u.es_admin === undefined))
+    setCargado(true)
     setUsuarios(filas.map((u) => ({ email: u.email ?? '', nombre: u.nombre ?? null, es_admin: !!u.es_admin, cambiar_clave: !!u.cambiar_clave })))
   }, [])
   useEffect(() => {
@@ -43,6 +47,8 @@ export function UsuariosProvider({ children }: { children: ReactNode }) {
   }, [yo, recargar])
 
   const esAdmin = sinMultiusuario || usuarios.some((u) => u.email === yo && u.es_admin)
+  // Un email no autorizado no ve ninguna fila de la tabla (ni la suya).
+  const noAutorizado = cargado && !usuarios.some((u) => u.email === yo)
   const debeCambiarClave = usuarios.some((u) => u.email === yo && u.cambiar_clave)
   const nombreDe = (email: string | null | undefined) => {
     if (!email) return ''
@@ -51,7 +57,7 @@ export function UsuariosProvider({ children }: { children: ReactNode }) {
   const puedeEditar = (dueno: string | null | undefined) => (dueno === undefined ? true : dueno === yo)
 
   return (
-    <UsuariosCtx.Provider value={{ yo, esAdmin, debeCambiarClave, usuarios, nombreDe, puedeEditar, recargar }}>
+    <UsuariosCtx.Provider value={{ yo, esAdmin, debeCambiarClave, noAutorizado, usuarios, nombreDe, puedeEditar, recargar }}>
       {children}
     </UsuariosCtx.Provider>
   )
