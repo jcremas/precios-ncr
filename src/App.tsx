@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { configFaltante, supabase } from '@/lib/supabase'
@@ -14,6 +14,7 @@ import Skus from '@/pages/Skus'
 import ListaGeneral from '@/pages/ListaGeneral'
 import Consultas from '@/pages/Consultas'
 import Niveles from '@/pages/Niveles'
+import MiCuenta from '@/pages/MiCuenta'
 import { NivelesProvider } from '@/lib/niveles'
 import { UsuariosProvider, useUsuarios } from '@/lib/usuarios'
 
@@ -30,7 +31,10 @@ const SECCIONES = [
 
 function Layout() {
   const { session } = useAuth()
-  const { esAdmin, nombreDe, yo } = useUsuarios()
+  const { esAdmin, nombreDe, yo, debeCambiarClave } = useUsuarios()
+  const { pathname } = useLocation()
+  // Con la contraseña temporal, primero hay que cambiarla.
+  if (debeCambiarClave && pathname !== '/cuenta') return <Navigate to="/cuenta" replace />
   return (
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
@@ -50,7 +54,7 @@ function Layout() {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="hidden sm:inline" title={session?.user.email}>{nombreDe(yo) || session?.user.email}</span>
+            <Link to="/cuenta" className="hover:underline" title={`${session?.user.email} · Mi cuenta (cambiar contraseña)`}>{nombreDe(yo) || session?.user.email}</Link>
             {esAdmin && <span className="rounded bg-accent px-1.5 py-0.5 text-xs">Administrador</span>}
             <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
               <LogOut /> Salir
@@ -103,6 +107,7 @@ export default function App() {
             <Route path="/enviar" element={<EnviarListas />} />
             <Route path="/skus" element={<Skus />} />
             <Route path="/niveles" element={<Niveles />} />
+            <Route path="/cuenta" element={<MiCuenta />} />
             <Route path="*" element={<Navigate to="/ajuste" replace />} />
           </Route>
         </Routes>
