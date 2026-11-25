@@ -15,9 +15,16 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-interface Linea { sku: number; descripcion: string; precio: number; mes: string; origen: string; pallet?: number | null }
+interface Linea { sku: number; descripcion: string; precio: number; mes: string; origen: string; pallet?: number | null; peso?: number | null }
 
 const fmtUnidades = new Intl.NumberFormat('es-AR')
+const fmtPpt = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+/** PPT miles = (precio / peso de la botella en gramos) × 1000. Solo pantalla: no va en la copia ni en el correo. */
+function pptMiles(l: Linea): string {
+  const peso = Number(l.peso)
+  return l.peso && peso > 0 ? fmtPpt.format((Number(l.precio) / peso) * 1000) : '—'
+}
 
 export default function Cotizar() {
   const { nombre: nombreNivel } = useNiveles()
@@ -68,12 +75,12 @@ export default function Cotizar() {
     setCorreoListo(false)
     if (!cliente || !mes || !meses.includes(mes)) return
     let vigente = true
-    Promise.all([cotizar(cliente, mes), supabase.from('skus').select('sku, unidades_pallet')]).then(([{ lineas, error }, s]) => {
+    Promise.all([cotizar(cliente, mes), supabase.from('skus').select('sku, unidades_pallet, peso')]).then(([{ lineas, error }, s]) => {
       if (!vigente) return
       if (error) return setAviso(error)
       setAviso(lineas.length ? null : 'El cliente no tiene SKUs tildados con precio en ese mes.')
-      const pallet = new Map((s.data ?? []).map((x) => [x.sku, x.unidades_pallet as number | null]))
-      setLineas(lineas.map((l) => ({ ...l, pallet: pallet.get(l.sku) ?? null })))
+      const datos = new Map((s.data ?? []).map((x) => [x.sku, x as { unidades_pallet: number | null; peso: number | null }]))
+      setLineas(lineas.map((l) => ({ ...l, pallet: datos.get(l.sku)?.unidades_pallet ?? null, peso: datos.get(l.sku)?.peso ?? null })))
     })
     return () => { vigente = false }
   }, [cliente, mes, meses])
@@ -168,6 +175,7 @@ export default function Cotizar() {
                 <TableHead>Producto</TableHead>
                 <TableHead className="text-right">Precio</TableHead>
                 <TableHead className="text-right">Unid./pallet</TableHead>
+                <TableHead className="text-right" title="(Precio / peso de la botella en gramos) × 1000. Solo se ve acá: no sale en la copia ni en el correo.">PPT miles</TableHead>
                 <TableHead>Desde</TableHead>
               </TableRow>
             </TableHeader>
@@ -178,6 +186,7 @@ export default function Cotizar() {
                   <TableCell>{l.descripcion}</TableCell>
                   <TableCell className="text-right tabular-nums">{precio(Number(l.precio))}</TableCell>
                   <TableCell className="text-right tabular-nums">{l.pallet ? fmtUnidades.format(l.pallet) : '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">{pptMiles(l)}</TableCell>
                   <TableCell className="text-muted-foreground">{nombreMes(l.mes)}</TableCell>
                 </TableRow>
               ))}
