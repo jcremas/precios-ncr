@@ -13,12 +13,14 @@ import EnviarListas from '@/pages/EnviarListas'
 import Skus from '@/pages/Skus'
 import ListaGeneral from '@/pages/ListaGeneral'
 import Consultas from '@/pages/Consultas'
+import Inicio from '@/pages/Inicio'
 import Niveles from '@/pages/Niveles'
 import MiCuenta from '@/pages/MiCuenta'
 import { NivelesProvider } from '@/lib/niveles'
 import { UsuariosProvider, useUsuarios } from '@/lib/usuarios'
 
 const SECCIONES = [
+  { a: '/inicio', texto: 'Inicio' },
   { a: '/ajuste', texto: 'Ajuste mensual' },
   { a: '/lista', texto: 'Lista general' },
   { a: '/clientes', texto: 'Clientes' },
@@ -110,7 +112,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<Protegido />}>
-            <Route index element={<Navigate to="/ajuste" replace />} />
+            <Route index element={<Navigate to="/inicio" replace />} />
+            <Route path="/inicio" element={<Inicio />} />
             <Route path="/ajuste" element={<EnvioMensual />} />
             <Route path="/envio" element={<Navigate to="/ajuste" replace />} />
             <Route path="/clientes" element={<Clientes />} />
@@ -122,7 +125,7 @@ export default function App() {
             <Route path="/skus" element={<Skus />} />
             <Route path="/niveles" element={<Niveles />} />
             <Route path="/cuenta" element={<MiCuenta />} />
-            <Route path="*" element={<Navigate to="/ajuste" replace />} />
+            <Route path="*" element={<Navigate to="/inicio" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>

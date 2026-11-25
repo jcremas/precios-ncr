@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { grillasActivas, listasGenerales, mensajeError, preciosDeClientes } from '@/lib/datos'
 import { aInputMes, desdeInputMes, mesActual, mesSiguiente, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
@@ -35,7 +36,9 @@ export default function EnvioMensual() {
   const [skus, setSkus] = useState<Map<number, Sku>>(new Map())
   const [grillas, setGrillas] = useState<{ cliente_id: number; sku: number }[]>([])
   const [precios, setPrecios] = useState<PrecioCliente[]>([])
-  const [seleccion, setSeleccion] = useState<string>('')
+  // Desde Inicio se llega con ?cliente=ID para ajustar ese cliente.
+  const [params] = useSearchParams()
+  const [seleccion, setSeleccion] = useState<string>(params.get('cliente') ?? '')
   const [mesNuevo, setMesNuevo] = useState<string>(mesActual())
   const [aumento, setAumento] = useState<string>('')
   const [nuevos, setNuevos] = useState<Record<string, string>>({})
