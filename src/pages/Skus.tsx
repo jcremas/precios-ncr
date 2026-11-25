@@ -3,6 +3,8 @@ import { Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import type { EstadoSku, Sku } from '@/lib/tipos'
+import { useUsuarios } from '@/lib/usuarios'
+import { AvisoSoloAdmin } from '@/components/AvisoSoloAdmin'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -102,6 +104,7 @@ function FilaSku({ s, onGuardado }: { s: Sku; onGuardado: () => void }) {
 }
 
 export default function Skus() {
+  const { esAdmin } = useUsuarios()
   const [skus, setSkus] = useState<Sku[]>([])
   const [nuevo, setNuevo] = useState({ sku: '', descripcion: '', familia: '', admite_descuento: true, para_genericos: true })
   const [abierto, setAbierto] = useState(false)
@@ -163,9 +166,12 @@ export default function Skus() {
     <div className="grid gap-6">
       <div className="flex items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold">SKUs</h1>
+        {esAdmin && <>
         <Button variant="outline" onClick={() => setVerPegar(!verPegar)}>Pegar datos desde Excel</Button>
         <Button onClick={() => setAbierto(true)}><Plus /> Nuevo SKU</Button>
+        </>}
       </div>
+      <AvisoSoloAdmin que="la tabla de SKUs" />
 
       {verPegar && (
         <Card>
@@ -197,6 +203,7 @@ export default function Skus() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      <fieldset disabled={!esAdmin} className="contents">
       <Table>
         <TableHeader>
           <TableRow>
@@ -217,6 +224,7 @@ export default function Skus() {
           {skus.map((s) => <FilaSku key={`${s.sku}-${s.descripcion}-${s.familia}-${s.estado}-${s.admite_descuento}-${s.para_genericos}-${s.unidades_pallet}-${s.peso}-${s.color}-${s.sinonimos}`} s={s} onGuardado={cargar} />)}
         </TableBody>
       </Table>
+      </fieldset>
     </div>
   )
 }

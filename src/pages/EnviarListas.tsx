@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { mensajeError, traerTodo } from '@/lib/datos'
 import { nombreMes } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente } from '@/lib/tipos'
+import { useUsuarios } from '@/lib/usuarios'
 import { useNiveles } from '@/lib/niveles'
 import {
   MARCAS, PLANTILLA_INICIAL, armarZip, bajar, destinatarios, emlDeCliente, guardarPlantilla, leerPlantilla, nombreArchivo,
@@ -16,7 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-type ClienteEnvio = Pick<Cliente, 'id' | 'nombre' | 'nro_cliente' | 'modalidad' | 'nivel_id' | 'contacto' | 'email' | 'condicion_pago' | 'empaque_consignado'>
+type ClienteEnvio = Pick<Cliente, 'id' | 'nombre' | 'nro_cliente' | 'modalidad' | 'nivel_id' | 'contacto' | 'email' | 'condicion_pago' | 'empaque_consignado' | 'dueno'>
 
 interface Resultado { armados: number; sinPrecios: string[]; sinEmail: string[]; errores: string[] }
 
@@ -48,6 +49,9 @@ async function mesesPorCliente(ids: number[]): Promise<Map<number, string[]>> {
 
 export default function EnviarListas() {
   const { niveles, nombre: nombreNivel } = useNiveles()
+  const { yo, usuarios, nombreDe } = useUsuarios()
+  const [dueno, setDueno] = useState<string | null>(null) // null = mis clientes
+  const duenoElegido = dueno ?? yo
   const [clientes, setClientes] = useState<ClienteEnvio[]>([])
   const [meses, setMeses] = useState<Map<number, string[]> | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -63,7 +67,7 @@ export default function EnviarListas() {
   const [resultado, setResultado] = useState<Resultado | null>(null)
 
   useEffect(() => {
-    supabase.from('clientes').select('id, nombre, nro_cliente, modalidad, nivel_id, contacto, email, condicion_pago, empaque_consignado')
+    supabase.from('clientes').select('*')
       .eq('activo', true).eq('cotiza', true).order('nombre').order('id')
       .then(({ data, error }) => {
         if (error) return setError(mensajeError(error))
@@ -92,11 +96,12 @@ export default function EnviarListas() {
   const f = filtro.trim().toUpperCase()
   const visibles = useMemo(() => clientes.filter((c) =>
     (!mes || (meses?.get(c.id) ?? []).includes(mes)) &&
+    (!duenoElegido || c.dueno === undefined || c.dueno === duenoElegido) &&
     (!modalidad || c.modalidad === modalidad) &&
     (!nivel || String(c.nivel_id) === nivel) &&
     (!soloConEmail || destinatarios(c.email).length > 0) &&
     (!f || c.nombre.toUpperCase().includes(f) || (c.nro_cliente ?? '').toUpperCase().includes(f))),
-  [clientes, meses, mes, modalidad, nivel, soloConEmail, f])
+  [clientes, meses, mes, duenoElegido, modalidad, nivel, soloConEmail, f])
 
   const tildables = visibles.filter((c) => mesDe(c.id))
   const todosVisiblesTildados = tildables.length > 0 && tildables.every((c) => tildados.has(c.id))
@@ -185,6 +190,13 @@ export default function EnviarListas() {
                 {mesesDisponibles.map((m) => (
                   <option key={m} value={m}>Solo {nombreMes(m)} ({cuantos(m)} cliente{cuantos(m) === 1 ? '' : 's'})</option>
                 ))}
+              </Select>
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="dueno">Dueño</Label>
+              <Select id="dueno" className="w-44" value={duenoElegido} onChange={(e) => setDueno(e.target.value)}>
+                <option value="">Clientes de todos</option>
+                {usuarios.map((u) => <option key={u.email} value={u.email}>{u.email === yo ? 'Mis clientes' : `De ${nombreDe(u.email)}`}</option>)}
               </Select>
             </div>
             <div className="grid gap-1">

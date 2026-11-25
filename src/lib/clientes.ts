@@ -1,7 +1,7 @@
 import { mensajeError } from '@/lib/datos'
 import type { Cliente } from '@/lib/tipos'
 
-export type DatosCliente = Omit<Cliente, 'id' | 'activo'>
+export type DatosCliente = Omit<Cliente, 'id' | 'activo' | 'dueno'>
 
 export const clienteVacio: DatosCliente = {
   nro_cliente: '', segmento: '', nombre: '', contacto: '', email: '', condicion_pago: '',

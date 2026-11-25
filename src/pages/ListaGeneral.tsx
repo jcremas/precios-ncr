@@ -5,6 +5,8 @@ import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, redondear 
 import { exportarExcel, listaVigente, precioConDescuento } from '@/lib/precios'
 import type { ListaGeneral as Lista, Sku } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
+import { useUsuarios } from '@/lib/usuarios'
+import { AvisoSoloAdmin } from '@/components/AvisoSoloAdmin'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +25,7 @@ const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-AR', { day: 
 
 export default function ListaGeneral() {
   const { niveles } = useNiveles()
+  const { esAdmin } = useUsuarios()
   const conDescuento = niveles.filter((n) => n.descuento_pct > 0)
   const [skus, setSkus] = useState<Sku[]>([])
   const [listas, setListas] = useState<Lista[]>([])
@@ -176,20 +179,23 @@ export default function ListaGeneral() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="w-full"><AvisoSoloAdmin que="la lista general" /></div>
           <div className="grid gap-2">
             <Label htmlFor="mes">Mes de la lista</Label>
             <Input id="mes" type="month" className="w-44" value={aInputMes(mes)} onChange={(e) => e.target.value && setMes(desdeInputMes(e.target.value))} />
           </div>
-          <div className="grid gap-2">
+          {esAdmin && <div className="grid gap-2">
             <Label htmlFor="aum">% sobre la lista anterior</Label>
             <Input id="aum" className="w-32" inputMode="decimal" placeholder="ej. 4,5" value={aumento} onChange={(e) => setAumento(e.target.value)} />
-          </div>
+          </div>}
+          {esAdmin && <>
           <Button variant="secondary" disabled={!anterior.size || !aumento} onClick={() => desdeAnterior(aNumero(aumento))}>Aplicar %</Button>
           <Button variant="outline" disabled={!anterior.size} onClick={() => desdeAnterior(0)}>Copiar anterior</Button>
           <Button variant="outline" onClick={() => setVerPegar(!verPegar)}>Pegar desde Excel</Button>
+          </>}
           <Button variant="outline" onClick={exportar} disabled={!delMes.size}>Exportar a Excel</Button>
         </CardContent>
-        {verPegar && (
+        {esAdmin && verPegar && (
           <CardContent className="grid gap-2">
             <Label htmlFor="pegado">Copiá en Excel las columnas SKU, precio de LISTA y (opcional) mínimo, y pegalas acá:</Label>
             <textarea id="pegado" className="min-h-32 rounded-md border p-2 font-mono text-sm" value={pegado} onChange={(e) => setPegado(e.target.value)} placeholder={'11008938\t308,3\t250\n11008939\t313,2'} />
@@ -211,14 +217,15 @@ export default function ListaGeneral() {
           {cambios.length > 0 && ` · ${cambios.length} cambio(s) sin guardar`}
           {invalidos.length > 0 && ` · ${invalidos.length} valor(es) inválido(s)`}
         </p>
-        <div className="ml-auto flex gap-2">
+        {esAdmin && <div className="ml-auto flex gap-2">
           <Button onClick={guardar} disabled={ocupado || !cambios.length || invalidos.length > 0}>Guardar lista</Button>
           <Button variant={sinPublicar ? 'default' : 'secondary'} onClick={publicar} disabled={ocupado || !delMes.size || cambios.length > 0}>
             Publicar a {genericos} genérico(s)
           </Button>
-        </div>
+        </div>}
       </div>
 
+      <fieldset disabled={!esAdmin} className="contents">
       <Table>
         <TableHeader>
           <TableRow>
@@ -257,6 +264,7 @@ export default function ListaGeneral() {
           })}
         </TableBody>
       </Table>
+      </fieldset>
     </div>
   )
 }

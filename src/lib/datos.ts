@@ -39,6 +39,9 @@ export async function grillasActivas(ids?: number[]) {
 }
 
 export function mensajeError(e: unknown): string {
-  if (e && typeof e === 'object' && 'message' in e) return String((e as { message: string }).message)
-  return String(e)
+  const m = e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : String(e)
+  // Permisos de la base (multiusuario, 0013).
+  if (/row-level security|row level security/i.test(m))
+    return 'No tenés permiso para modificar esto: los clientes y sus precios los modifica solo su dueño; la lista general, los SKUs y los niveles, solo el administrador.'
+  return m
 }

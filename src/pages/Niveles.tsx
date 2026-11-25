@@ -3,6 +3,8 @@ import { Plus, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { useNiveles, type NivelDescuento } from '@/lib/niveles'
+import { useUsuarios } from '@/lib/usuarios'
+import { AvisoSoloAdmin } from '@/components/AvisoSoloAdmin'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -75,6 +77,7 @@ function FilaNivel({ n, uso, onCambio }: { n: NivelDescuento; uso: Uso; onCambio
 
 export default function Niveles() {
   const { niveles, recargar } = useNiveles()
+  const { esAdmin } = useUsuarios()
   const [usos, setUsos] = useState<Map<number, Uso>>(new Map())
   const [nuevo, setNuevo] = useState({ codigo: '', pct: '' })
   const [aviso, setAviso] = useState<string | null>(null)
@@ -125,17 +128,19 @@ export default function Niveles() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={crear} className="flex flex-wrap items-end gap-3">
+          <AvisoSoloAdmin que="los niveles" />
+          {esAdmin && <form onSubmit={crear} className="flex flex-wrap items-end gap-3">
             <div className="grid gap-2"><Label htmlFor="niv-nombre">Nombre</Label><Input id="niv-nombre" className="w-48 uppercase" value={nuevo.codigo} onChange={(e) => setNuevo({ ...nuevo, codigo: e.target.value })} /></div>
             <div className="grid gap-2"><Label htmlFor="niv-pct">Descuento %</Label><Input id="niv-pct" className="w-24 text-right" inputMode="decimal" value={nuevo.pct} onChange={(e) => setNuevo({ ...nuevo, pct: e.target.value })} /></div>
             <Button type="submit"><Plus /> Agregar nivel</Button>
-          </form>
+          </form>}
         </CardContent>
       </Card>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {aviso && <p className="rounded-md bg-green-50 p-3 text-sm text-green-800">{aviso}</p>}
 
+      <fieldset disabled={!esAdmin} className="contents">
       <Table>
         <TableHeader>
           <TableRow>
@@ -152,6 +157,7 @@ export default function Niveles() {
           ))}
         </TableBody>
       </Table>
+      </fieldset>
     </div>
   )
 }

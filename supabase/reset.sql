@@ -52,6 +52,10 @@ drop function if exists public.tocar_actualizado_en() cascade;
 drop function if exists public.preparar_grilla_especial() cascade;
 drop function if exists public.preparar_grilla() cascade;
 drop function if exists public.agregar_sku_a_genericos() cascade;
+drop function if exists public.transferir_cliente(bigint, text) cascade;
+drop function if exists public.es_dueno(bigint) cascade;
+drop function if exists public.es_admin() cascade;
+drop function if exists public.mi_email() cascade;
 drop function if exists public.es_autorizado() cascade;
 
 -- Verificación: tiene que devolver 0 filas.
