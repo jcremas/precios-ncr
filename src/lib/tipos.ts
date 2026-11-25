@@ -39,6 +39,8 @@ export interface Cliente {
   cotiza: boolean
   observaciones: string | null
   activo: boolean
+  /** Email del usuario dueño: solo él lo modifica (0013). */
+  dueno?: string
 }
 
 export interface IndiceCliente {
@@ -53,6 +55,8 @@ export interface IndiceCliente {
   activo: boolean
   skus_activos: number
   ultimo_mes: string | null
+  /** Email del usuario dueño (0013). */
+  dueno?: string
 }
 
 export interface PrecioCliente {

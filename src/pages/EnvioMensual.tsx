@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { grillasActivas, listasGenerales, mensajeError, preciosDeClientes } from '@/lib/datos'
 import { aInputMes, desdeInputMes, mesActual, mesSiguiente, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { listaVigente } from '@/lib/precios'
+import { useUsuarios } from '@/lib/usuarios'
 import type { Cliente, ListaGeneral, Origen, PrecioCliente, Sku } from '@/lib/tipos'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +30,7 @@ interface Fila {
 }
 
 export default function EnvioMensual() {
+  const { yo } = useUsuarios()
   const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nro_cliente'>[]>([])
   const [skus, setSkus] = useState<Map<number, Sku>>(new Map())
   const [grillas, setGrillas] = useState<{ cliente_id: number; sku: number }[]>([])
@@ -47,9 +49,11 @@ export default function EnvioMensual() {
     setCargando(true)
     try {
       // Solo clientes ESPECIALES que cotizan: los genéricos se actualizan con la lista general.
-      const cli = await supabase.from('clientes').select('id, nombre, nro_cliente').eq('modalidad', 'ESPECIAL').eq('cotiza', true).eq('activo', true).order('nombre')
+      // Y solo los del usuario: los de otro dueño no se pueden modificar (0013).
+      const cli = await supabase.from('clientes').select('*').eq('modalidad', 'ESPECIAL').eq('cotiza', true).eq('activo', true).order('nombre')
       if (cli.error) throw cli.error
-      const ids = (cli.data ?? []).map((c) => c.id)
+      const mios = ((cli.data ?? []) as Cliente[]).filter((c) => c.dueno === undefined || c.dueno === yo)
+      const ids = mios.map((c) => c.id)
       const [sk, gr, pr, li] = await Promise.all([
         supabase.from('skus').select('*'),
         grillasActivas(ids),
@@ -58,7 +62,7 @@ export default function EnvioMensual() {
       ])
       if (sk.error) throw sk.error
       setListas(li)
-      setClientes(cli.data ?? [])
+      setClientes(mios)
       setSkus(new Map((sk.data as Sku[]).map((s) => [s.sku, s])))
       setGrillas(gr)
       setPrecios(pr)
@@ -183,7 +187,7 @@ export default function EnvioMensual() {
         <CardHeader>
           <CardTitle>Ajuste mensual</CardTitle>
           <CardDescription>
-            Para clientes especiales (los genéricos se actualizan al publicar la lista general). Elegí un cliente o TODOS, el mes y, si querés, un % de aumento sobre el último precio. A la derecha tenés la lista general y el precio mínimo: si un precio queda por debajo del mínimo se marca en rojo.
+            Para tus clientes especiales (los de otros usuarios los ajusta su dueño; los genéricos se actualizan al publicar la lista general). Elegí un cliente o TODOS, el mes y, si querés, un % de aumento sobre el último precio. A la derecha tenés la lista general y el precio mínimo: si un precio queda por debajo del mínimo se marca en rojo.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
@@ -192,7 +196,7 @@ export default function EnvioMensual() {
             <Combobox id="cliente" value={seleccion} onChange={setSeleccion} disabled={cargando}
               placeholder={cargando ? 'Cargando…' : 'Escribí parte del nombre o del código…'}
               opciones={[
-                { value: TODOS, label: `TODOS los clientes especiales (${clientes.length})` },
+                { value: TODOS, label: `TODOS mis clientes especiales (${clientes.length})` },
                 ...clientes.map((c) => ({ value: String(c.id), label: c.nombre, detalle: c.nro_cliente ?? undefined })),
               ]} />
             

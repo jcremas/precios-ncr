@@ -15,6 +15,7 @@ import ListaGeneral from '@/pages/ListaGeneral'
 import Consultas from '@/pages/Consultas'
 import Niveles from '@/pages/Niveles'
 import { NivelesProvider } from '@/lib/niveles'
+import { UsuariosProvider, useUsuarios } from '@/lib/usuarios'
 
 const SECCIONES = [
   { a: '/ajuste', texto: 'Ajuste mensual' },
@@ -29,6 +30,7 @@ const SECCIONES = [
 
 function Layout() {
   const { session } = useAuth()
+  const { esAdmin, nombreDe, yo } = useUsuarios()
   return (
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
@@ -48,7 +50,8 @@ function Layout() {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="hidden sm:inline">{session?.user.email}</span>
+            <span className="hidden sm:inline" title={session?.user.email}>{nombreDe(yo) || session?.user.email}</span>
+            {esAdmin && <span className="rounded bg-accent px-1.5 py-0.5 text-xs">Administrador</span>}
             <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
               <LogOut /> Salir
             </Button>
@@ -66,7 +69,7 @@ function Protegido() {
   const { session, cargando } = useAuth()
   if (cargando) return <p className="p-8 text-muted-foreground">Cargando…</p>
   if (!session) return <Navigate to="/login" replace />
-  return <NivelesProvider><Layout /></NivelesProvider>
+  return <UsuariosProvider><NivelesProvider><Layout /></NivelesProvider></UsuariosProvider>
 }
 
 function FaltaConfig() {

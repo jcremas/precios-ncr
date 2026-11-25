@@ -6,6 +6,7 @@ import { listasGenerales, mensajeError, preciosDeClientes } from '@/lib/datos'
 import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { listaVigente, precioConDescuento } from '@/lib/precios'
 import { etiquetaNivel, useNiveles } from '@/lib/niveles'
+import { useUsuarios } from '@/lib/usuarios'
 import { nombreModalidad, type Cliente, type ListaGeneral, type PrecioCliente, type Sku } from '@/lib/tipos'
 import { traducirError, type DatosCliente } from '@/lib/clientes'
 import { FormCliente } from '@/components/FormCliente'
@@ -120,6 +121,7 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
 
 export default function ClienteDetalle() {
   const { descuento, nombre } = useNiveles()
+  const { esAdmin, usuarios, nombreDe, puedeEditar } = useUsuarios()
   const id = Number(useParams().id)
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [skus, setSkus] = useState<Sku[]>([])
@@ -183,6 +185,14 @@ export default function ClienteDetalle() {
     return null
   }
 
+  async function cambiarDueno(email: string) {
+    if (!cliente || !email || email === cliente.dueno) return
+    if (!confirm(`¿Pasar ${cliente.nombre} a ${nombreDe(email)}? Desde ese momento solo ${nombreDe(email)} lo va a poder modificar.`)) return
+    const { error } = await supabase.rpc('transferir_cliente', { p_cliente_id: id, p_email: email })
+    if (error) return setError(mensajeError(error))
+    await cargar()
+  }
+
   async function cambiarActivo(sku: number, activo: boolean) {
     const { error } = await supabase.from('cliente_skus').upsert({ cliente_id: id, sku, activo })
     if (error) setError(mensajeError(error))
@@ -199,6 +209,7 @@ export default function ClienteDetalle() {
   if (!cliente) return <p className="text-muted-foreground">Cargando…</p>
 
   const disponibles = skus.filter((s) => s.estado === 'ACTIVO' && !grilla.some((g) => g.sku === s.sku && g.activo))
+  const editable = puedeEditar(cliente.dueno)
   const tildados = grilla.filter((g) => g.activo).map((g) => g.sku)
 
   return (
@@ -212,9 +223,22 @@ export default function ClienteDetalle() {
           {cliente.nivel_id != null && <Badge variant="outline">{nombre(cliente.nivel_id)} ({String(descuento(cliente.nivel_id)).replace('.', ',')}%)</Badge>}
           {!cliente.cotiza && <Badge variant="baja">No cotiza</Badge>}
           {!cliente.nro_cliente && <Badge variant="alerta">Falta código de cliente</Badge>}
-          {!editando && <Button className="ml-auto" variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}
+          {!editando && editable && <Button className="ml-auto" variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}
         </CardHeader>
         <CardContent>
+          {cliente.dueno !== undefined && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Dueño:</span>
+              {esAdmin && usuarios.length > 1 ? (
+                <Select className="h-8 w-56" aria-label="Dueño" value={cliente.dueno} onChange={(e) => cambiarDueno(e.target.value)}>
+                  {usuarios.map((u) => <option key={u.email} value={u.email}>{nombreDe(u.email)}</option>)}
+                </Select>
+              ) : (
+                <span className="font-medium">{nombreDe(cliente.dueno)}</span>
+              )}
+              {!editable && <Badge variant="outline">Solo lectura: lo modifica {nombreDe(cliente.dueno)}</Badge>}
+            </div>
+          )}
           {editando ? (
             <FormCliente inicial={cliente} onGuardar={guardarCliente} onCancelar={() => setEditando(false)} />
           ) : (
@@ -236,21 +260,21 @@ export default function ClienteDetalle() {
         </CardContent>
       </Card>
 
-      {cliente.modalidad === 'ESPECIAL' && cliente.cotiza && !precios.length && (
+      {editable && cliente.modalidad === 'ESPECIAL' && cliente.cotiza && !precios.length && (
         <ListaInicial cliente={cliente} skus={porSku} grilla={tildados} listas={listas} onGuardado={cargar} />
       )}
 
       <div className="grid gap-3">
         <div className="flex flex-wrap items-end gap-3">
           <h2 className="mr-auto text-lg font-semibold">Historial de precios</h2>
-          <Combobox className="w-80" value={skuNuevo} onChange={setSkuNuevo} placeholder={`Tildar otro SKU para este cliente (${disponibles.length} disponibles)…`}
+          {editable && <><Combobox className="w-80" value={skuNuevo} onChange={setSkuNuevo} placeholder={`Tildar otro SKU para este cliente (${disponibles.length} disponibles)…`}
             opciones={disponibles.map((s) => ({ value: String(s.sku), label: s.descripcion, detalle: String(s.sku) }))} />
-          <Button variant="secondary" onClick={agregarSku} disabled={!skuNuevo}>Agregar</Button>
+          <Button variant="secondary" onClick={agregarSku} disabled={!skuNuevo}>Agregar</Button></>}
         </div>
-        <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+        {editable && <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
           <input type="checkbox" checked={verTodos} onChange={(e) => setVerTodos(e.target.checked)} />
           Ver todos los SKUs activos (también los que este cliente nunca tuvo), para tildarlos desde la tabla
-        </label>
+        </label>}
         <p className="text-xs text-muted-foreground">
           La columna "Se cotiza" es el mapa de SKUs: destildá los que no se le cotizan. Un SKU recién tildado se cotiza cuando tenga precio cargado (en Ajuste mensual, si es especial). Debajo de cada precio va la variación contra el mes anterior: <Badge variant="alerta">+30%</Badge> aumento atípico (más de {UMBRAL_AUMENTO_ATIPICO}%), <Badge variant="baja">-%</Badge> baja.
         </p>
@@ -268,7 +292,7 @@ export default function ClienteDetalle() {
             {filas.map((f) => (
               <TableRow key={f.sku} className={f.activo ? '' : 'text-muted-foreground'}>
                 <TableCell>
-                  <input type="checkbox" aria-label={`Cotizar SKU ${f.sku}`} checked={f.activo} onChange={(e) => cambiarActivo(f.sku, e.target.checked)} />
+                  <input type="checkbox" aria-label={`Cotizar SKU ${f.sku}`} checked={f.activo} disabled={!editable} onChange={(e) => cambiarActivo(f.sku, e.target.checked)} />
                 </TableCell>
                 <TableCell className="font-mono text-xs">{f.sku}</TableCell>
                 <TableCell>{f.descripcion}</TableCell>
