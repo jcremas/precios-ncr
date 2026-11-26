@@ -8,8 +8,9 @@ import { AvisoSoloAdmin } from '@/components/AvisoSoloAdmin'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Ayuda } from '@/components/Ayuda'
 
 interface Uso { total: number; genericos: number }
 
@@ -118,14 +119,13 @@ export default function Niveles() {
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       <Card>
         <CardHeader>
           <CardTitle>Niveles de descuento</CardTitle>
-          <CardDescription>
-            Los clientes genéricos pagan la lista general menos el % de su nivel. Si cambiás el %, se recalculan los precios de este mes
-            de sus clientes genéricos (los meses anteriores quedan como estaban). Cambiar el nombre no cambia precios. Un nivel con clientes no se puede borrar.
-          </CardDescription>
+          <Ayuda resumen="Los clientes genéricos pagan la lista general menos el % de su nivel.">
+            <p>Si cambiás el %, se recalculan los precios de este mes de sus clientes genéricos (los meses anteriores quedan como estaban). Cambiar el nombre no cambia precios. Un nivel con clientes no se puede borrar.</p>
+          </Ayuda>
         </CardHeader>
         <CardContent>
           <AvisoSoloAdmin que="los niveles" />

@@ -59,7 +59,7 @@ export default function Clientes() {
   )
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="mr-auto text-xl font-semibold">Clientes</h1>
         <Input className="w-64" placeholder="Buscar por nombre o código" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
@@ -94,7 +94,7 @@ export default function Clientes() {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <p className="text-sm text-muted-foreground">{visibles.length} de {lista.length} clientes</p>
-      <Table>
+      <Table fija>
         <TableHeader>
           <TableRow>
             <TableHead>Código</TableHead>

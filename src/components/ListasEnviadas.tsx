@@ -7,6 +7,7 @@ import { faltaMigracion, fechaHora, type ListaEnviada } from '@/lib/envios'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Ayuda } from '@/components/Ayuda'
 
 /** Historial de listas enviadas a un cliente (ficha del cliente, 0017). */
 export function ListasEnviadas({ clienteId, dueno }: { clienteId: number; dueno: string | null | undefined }) {
@@ -40,10 +41,9 @@ export function ListasEnviadas({ clienteId, dueno }: { clienteId: number; dueno:
   return (
     <div className="grid gap-3">
       <h2 className="text-lg font-semibold">Listas enviadas</h2>
-      <p className="text-xs text-muted-foreground">
-        Cada vez que se arma el correo para Outlook (Cotizar o Enviar listas) queda acá, con una copia de los precios que salieron.
-        La app no ve si apretaste Enviar en Outlook: si al final no lo mandaste, marcalo como "No se envió" (no se borra, deja de contar como enviado).
-      </p>
+      <Ayuda resumen="Cada correo armado para Outlook (Cotizar o Enviar listas), con una copia de los precios que salieron.">
+        <p>La app no ve si apretaste Enviar en Outlook: si al final no lo mandaste, marcalo como "No se envió" (no se borra, deja de contar como enviado).</p>
+      </Ayuda>
       {sinMigracion && <p className="text-sm text-amber-800">Para ver el historial de envíos falta correr la migración 0017 en Supabase.</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
       {filas && (

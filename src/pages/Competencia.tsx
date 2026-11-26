@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Download, Plus, Trash2 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
-import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio } from '@/lib/formato'
+import { aInputMes, mesActual, nombreMes, pct, precio } from '@/lib/formato'
 import { exportarExcel } from '@/lib/precios'
 import { useUsuarios } from '@/lib/usuarios'
 import { difPct, preciosCompetencia, resumir, type Competidor, type PrecioCompetencia, type ProductoCompetencia, type Resumen } from '@/lib/competencia'
@@ -18,6 +19,7 @@ import { revisarPrecios } from '@/lib/controles'
 import { useCambiosSinGuardar } from '@/lib/cambios'
 import { useConfirmar } from '@/components/Dialogo'
 import { AvisosPrecios } from '@/components/AvisosPrecios'
+import { SelectorMes } from '@/components/SelectorMes'
 
 /** En competencia el precio es de ellos: no hay mínimo, y avisamos si sube o baja más de esto contra su mes anterior. */
 const UMBRAL_COMPETENCIA = 30
@@ -124,7 +126,7 @@ export default function Competencia() {
   }, [recargar])
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       <div>
         <h1 className="text-xl font-semibold">Competencia</h1>
         <p className="text-sm text-muted-foreground">
@@ -165,7 +167,9 @@ function Cargar({ competidores, productos, skus, indice, filas, esAdmin, recarga
   filas: PrecioCompetencia[]; esAdmin: boolean; recargar: () => Promise<void>; irAProductos: () => void
 }) {
   const { puedeEditar, nombreDe } = useUsuarios()
-  const [clienteSel, setClienteSel] = useState('')
+  // /competencia?cliente=ID (desde la ficha del cliente) entra con ese cliente elegido.
+  const [params] = useSearchParams()
+  const [clienteSel, setClienteSel] = useState(params.get('cliente') ?? '')
   const [mes, setMes] = useState(mesActual())
   const [nuevo, setNuevo] = useState({ producto: '', precio: '', obs: '' })
   const [aviso, setAviso] = useState<string | null>(null)
@@ -241,11 +245,11 @@ function Cargar({ competidores, productos, skus, indice, filas, esAdmin, recarga
       <div className="flex flex-wrap items-end gap-3">
         <div className="grid gap-1">
           <Label htmlFor="comp-cliente" className="text-xs">Cliente</Label>
-          <Combobox id="comp-cliente" className="w-96" value={clienteSel} onChange={setClienteSel} opciones={opcionesCliente} placeholder="Buscar cliente por nombre o código…" />
+          <Combobox id="comp-cliente" className="w-full sm:w-96" value={clienteSel} onChange={setClienteSel} opciones={opcionesCliente} placeholder="Buscar cliente por nombre o código…" />
         </div>
         <div className="grid gap-1">
           <Label htmlFor="comp-mes" className="text-xs">Mes</Label>
-          <Input id="comp-mes" type="month" className="w-44" value={aInputMes(mes)} onChange={(e) => e.target.value && setMes(desdeInputMes(e.target.value))} />
+          <SelectorMes id="comp-mes" value={mes} onChange={setMes} />
         </div>
         {(cliente || esMercado) && !puede && (
           <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">

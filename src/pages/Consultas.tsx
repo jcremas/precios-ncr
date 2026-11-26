@@ -169,7 +169,7 @@ export default function Consultas() {
   if (error) return <p className="text-destructive">{error}</p>
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="mr-auto text-xl font-semibold">Consultas</h1>
         <div className="grid gap-1">
@@ -216,7 +216,7 @@ export default function Consultas() {
                 <BotonExportar onClick={() => exportarExcel(`resumen_skus_${aInputMes(mes)}`, ['SKU', 'Producto', 'Clientes', 'Mínimo', 'Máximo', 'Promedio', 'Mediana', 'Lista', 'Precio mínimo (piso)'],
                   porSku.map((s) => [s.sku, s.descripcion, s.clientes, s.minimo, s.maximo, r1(s.promedio), r1(s.mediana), s.lista, s.piso]))} />
               </div>
-              <Table>
+              <Table fija>
                 <TableHeader><TableRow>
                   <TableHead>SKU</TableHead><TableHead>Producto</TableHead><TableHead className="text-right">Clientes</TableHead>
                   <TableHead className="text-right">Mínimo</TableHead><TableHead className="text-right">Máximo</TableHead>
@@ -264,7 +264,7 @@ export default function Consultas() {
               <Stat titulo="Lista" valor={precio(sel.lista) || '—'} />
               <Stat titulo="Piso" valor={precio(sel.piso) || '—'} />
             </div>
-            <Table>
+            <Table fija>
               <TableHeader><TableRow>
                 <TableHead>#</TableHead><TableHead>Cliente</TableHead><TableHead>Modalidad</TableHead><TableHead>Nivel</TableHead>
                 <TableHead className="text-right">Precio</TableHead><TableHead className="text-right">vs promedio</TableHead><TableHead className="text-right">vs lista</TableHead>
@@ -306,7 +306,7 @@ export default function Consultas() {
               <p className="mr-auto text-sm text-muted-foreground">Cuánto paga cada cliente, en promedio, frente al promedio de cada SKU ({titulo}). Arriba los más baratos.</p>
               <BotonExportar onClick={() => exportarExcel(`ranking_${aInputMes(mes)}`, ['Posición', 'Cliente', 'Modalidad', 'Nivel', 'SKUs', 'vs promedio %'], filas.map((f, i) => [i + 1, f.cliente, nombreModalidad(f.modalidad), f.nivel, f.skus, r1(f.dif)]))} />
             </div>
-            <Table>
+            <Table fija>
               <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Cliente</TableHead><TableHead>Modalidad</TableHead><TableHead>Nivel</TableHead><TableHead className="text-right">SKUs</TableHead><TableHead className="text-right">vs promedio</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filas.map((f, i) => (
@@ -337,7 +337,7 @@ export default function Consultas() {
               <BotonExportar onClick={() => exportarExcel(`brecha_lista_${aInputMes(mes)}`, ['Cliente', 'SKU', 'Producto', 'Precio', 'Lista', 'vs lista %', nombreMayor, `vs ${nombreMayor} %`, 'Piso', 'Bajo el piso'],
                 filas.map((f) => [f.cliente, f.sku, f.descripcion, f.precio, f.lista, r1(f.vsLista), f.matar, r1(f.vsMatar), f.precio_minimo, f.bajo ? 'SÍ' : '']))} />
             </div>
-            <Table>
+            <Table fija>
               <TableHeader><TableRow>
                 <TableHead>Cliente</TableHead><TableHead>SKU</TableHead><TableHead>Producto</TableHead>
                 <TableHead className="text-right">Precio</TableHead><TableHead className="text-right">Lista</TableHead><TableHead className="text-right">vs lista</TableHead>
@@ -385,7 +385,7 @@ export default function Consultas() {
             {clienteSel && !historialListo && <p className="text-sm text-muted-foreground">Cargando meses anteriores…</p>}
             {clienteSel && !filas.length && <p className="text-sm text-muted-foreground">Este cliente no tiene precios en {nombreMes(mes)}.</p>}
             {filas.length > 0 && (
-              <Table>
+              <Table fija>
                 <TableHeader><TableRow>
                   <TableHead>SKU</TableHead><TableHead>Producto</TableHead><TableHead className="text-right">{nombreMes(mes)}</TableHead>
                   <TableHead className="text-right">Anterior</TableHead><TableHead className="text-right">Variación</TableHead>
@@ -425,7 +425,7 @@ export default function Consultas() {
               <BotonExportar onClick={() => exportarExcel(`ajustes_${aInputMes(mes)}`, ['Cliente', 'Código', 'Modalidad', 'SKUs tildados', `SKUs con precio ${nombreMes(mes)}`, 'Estado'],
                 filas.map((f) => [f.nombre, f.nro_cliente, nombreModalidad(f.modalidad), f.skus_activos, f.conPrecio, f.conPrecio ? (f.conPrecio < f.skus_activos ? 'Incompleto' : 'Enviado') : 'Falta']))} />
             </div>
-            <Table>
+            <Table fija>
               <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Modalidad</TableHead><TableHead className="text-right">SKUs tildados</TableHead><TableHead className="text-right">Con precio</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filas.map((f) => (
@@ -465,7 +465,7 @@ export default function Consultas() {
             </div>
             {!filas.length && <p className="text-sm text-muted-foreground">Ninguno: todos los clientes del filtro tuvieron cambios en los últimos {UMBRAL} meses.</p>}
             {filas.length > 0 && (
-              <Table>
+              <Table fija>
                 <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Modalidad</TableHead><TableHead>Nivel</TableHead><TableHead>Último cambio</TableHead><TableHead className="text-right">Meses sin cambios</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {filas.map((f) => (
@@ -497,7 +497,7 @@ export default function Consultas() {
               <p className="mr-auto text-sm text-muted-foreground">Cuántos clientes tienen tildado cada SKU activo. {nadie > 0 ? <span className="font-medium text-red-700">{nadie} SKU(s) no los cotiza nadie.</span> : 'Todos los SKUs se cotizan a alguien.'}</p>
               <BotonExportar onClick={() => exportarExcel('cobertura_skus', ['SKU', 'Producto', 'Genéricos', 'Especiales', 'Total'], filas.map((f) => [f.sku, f.descripcion, f.genericos, f.especiales, f.genericos + f.especiales]))} />
             </div>
-            <Table>
+            <Table fija>
               <TableHeader><TableRow><TableHead>SKU</TableHead><TableHead>Producto</TableHead><TableHead className="text-right">Genéricos</TableHead><TableHead className="text-right">Especiales</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filas.map((f) => (

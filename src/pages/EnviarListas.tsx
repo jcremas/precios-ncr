@@ -15,8 +15,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Ayuda } from '@/components/Ayuda'
 
 type ClienteEnvio = Pick<Cliente, 'id' | 'nombre' | 'nro_cliente' | 'modalidad' | 'nivel_id' | 'contacto' | 'email' | 'condicion_pago' | 'empaque_consignado' | 'dueno'>
 
@@ -214,16 +215,15 @@ export default function EnviarListas() {
   )
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       <Card>
         <CardHeader>
           <CardTitle>Enviar listas de precios por Outlook</CardTitle>
-          <CardDescription>
-            Tildá los clientes y apretá "Bajar correos". La app arma un correo por cliente (para su email, con asunto y la tabla de precios) y los baja juntos en un .zip.
-            Abrí el .zip, hacé doble clic en cada correo: se abre en Outlook como mensaje nuevo, lo revisás y apretás Enviar. La app no envía nada sola y no quedan en Borradores salvo que los cierres guardándolos.
-            En "Precios de" elegí un mes para ver solo los clientes que tienen lista ese mes, o "La última lista de cada cliente" para verlos a todos con el mes de su última lista. Los clientes NO COTIZA no aparecen.
-            Cada correo que se baja queda registrado (columna "Último envío" y ficha del cliente). "Sin enviar este mes" muestra los clientes a los que todavía no se les armó el correo de la lista de ese mes. Si al final no mandaste uno, marcalo como "No se envió" en la ficha del cliente.
-          </CardDescription>
+          <Ayuda resumen='Tildá los clientes y apretá "Bajar correos": se baja un .zip con un correo por cliente para abrir en Outlook y apretar Enviar.'>
+            <p>La app arma un correo por cliente (para su email, con asunto y la tabla de precios) y los baja juntos en un .zip. Abrí el .zip y hacé doble clic en cada correo: se abre en Outlook como mensaje nuevo, lo revisás y apretás Enviar. La app no envía nada sola y no quedan en Borradores salvo que los cierres guardándolos.</p>
+            <p>En "Precios de" elegí un mes para ver solo los clientes que tienen lista ese mes, o "La última lista de cada cliente" para verlos a todos con el mes de su última lista. Los clientes NO COTIZA no aparecen.</p>
+            <p>Cada correo que se baja queda registrado (columna "Último envío" y ficha del cliente). "Sin enviar este mes" muestra los clientes a los que todavía no se les armó el correo de la lista de ese mes. Si al final no mandaste uno, marcalo como "No se envió" en la ficha del cliente.</p>
+          </Ayuda>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -312,7 +312,7 @@ export default function EnviarListas() {
         </CardContent>
       </Card>
 
-      <Table>
+      <Table fija>
         <TableHeader>
           <TableRow>
             <TableHead className="w-10">

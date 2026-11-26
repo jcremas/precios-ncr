@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { copiarTabla } from '@/lib/copiar'
@@ -13,8 +14,9 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Ayuda } from '@/components/Ayuda'
 
 interface Linea { sku: number; descripcion: string; precio: number; mes: string; origen: string; pallet?: number | null; peso?: number | null }
 
@@ -30,7 +32,9 @@ function pptMiles(l: Linea): string {
 export default function Cotizar() {
   const { nombre: nombreNivel } = useNiveles()
   const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nombre' | 'nivel_id' | 'nro_cliente' | 'modalidad' | 'cotiza' | 'contacto' | 'email' | 'condicion_pago' | 'empaque_consignado'>[]>([])
-  const [id, setId] = useState('')
+  // /cotizar?cliente=ID (desde la ficha del cliente) entra con ese cliente elegido.
+  const [params] = useSearchParams()
+  const [id, setId] = useState(params.get('cliente') ?? '')
   const [modalidad, setModalidad] = useState<Modalidad | ''>('')
   const [meses, setMeses] = useState<string[]>([])
   const [mes, setMes] = useState('')
@@ -119,11 +123,14 @@ export default function Cotizar() {
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       <Card>
         <CardHeader>
           <CardTitle>Cotizar a un cliente</CardTitle>
-          <CardDescription>Solo los precios del mes elegido, sin mezclar meses (de entrada, el más nuevo). Si un SKU no tiene precio ese mes o está en cero, no se cotiza. Especial: su lista de ese mes. Genérico: sus precios guardados ese mes o, si no hay, la lista general de ese mes menos el descuento de su nivel. No cotiza: bloqueado. Solo SKUs tildados.</CardDescription>
+          <Ayuda resumen="Elegí el cliente y el mes: muestra solo los precios de ese mes, listos para copiar o armar el correo.">
+            <p>No mezcla meses (de entrada, el más nuevo). Si un SKU no tiene precio ese mes o está en cero, no se cotiza. Solo van los SKUs tildados del cliente.</p>
+            <p>Especial: su lista de ese mes. Genérico: sus precios guardados ese mes o, si no hay, la lista general de ese mes menos el descuento de su nivel. No cotiza: bloqueado.</p>
+          </Ayuda>
         </CardHeader>
         <CardContent className="grid max-w-4xl gap-4 md:grid-cols-[180px_1fr_190px]">
           <div className="grid gap-2">
@@ -155,11 +162,11 @@ export default function Cotizar() {
       {aviso && <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">{aviso}</p>}
 
       {lineas.length > 0 && (
-        <div className="grid gap-3">
-          <div className="flex items-center gap-3">
+        <div className="grid gap-3 [&>*]:min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
             <Badge>{cliente && nombreModalidad(cliente.modalidad)}{cliente?.nivel_id != null ? ` · ${nombreNivel(cliente.nivel_id)}` : ''}</Badge>
             <span className="text-sm text-muted-foreground">Precios de {nombreMes(lineas[0].mes)} · {lineas.length} SKU(s)</span>
-            <Button className="ml-auto" variant={verPedido ? 'secondary' : 'outline'} onClick={() => setVerPedido(!verPedido)}>Pegar pedido</Button>
+            <Button className="sm:ml-auto" variant={verPedido ? 'secondary' : 'outline'} onClick={() => setVerPedido(!verPedido)}>Pegar pedido</Button>
             <Button variant="outline" onClick={copiar}>{copiado ? 'Copiado ✓ Pegalo en el correo' : 'Copiar para enviar'}</Button>
             <Button variant="outline" onClick={correo}
               title={cliente && destinatarios(cliente.email).length ? `Para: ${destinatarios(cliente.email).join(', ')}` : 'El cliente no tiene email cargado: completalo en Outlook'}>
