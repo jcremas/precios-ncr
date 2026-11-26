@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { mensajeError } from '@/lib/datos'
 import { copiarTabla } from '@/lib/copiar'
 import { bajar, destinatarios, emlDeCliente, leerPlantilla, nombreArchivo } from '@/lib/correo'
+import { filaEnvio, registrarEnvios } from '@/lib/envios'
 import { nombreMes, precio } from '@/lib/formato'
 import { MODALIDADES, nombreModalidad, type Cliente, type Modalidad } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
@@ -38,6 +39,7 @@ export default function Cotizar() {
   const [copiado, setCopiado] = useState(false)
   const [verPedido, setVerPedido] = useState(false)
   const [correoListo, setCorreoListo] = useState(false)
+  const [avisoRegistro, setAvisoRegistro] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.from('clientes').select('id, nombre, nivel_id, nro_cliente, modalidad, cotiza, contacto, email, condicion_pago, empaque_consignado').eq('activo', true).order('nombre')
@@ -73,6 +75,7 @@ export default function Cotizar() {
     setLineas([])
     setCopiado(false)
     setCorreoListo(false)
+    setAvisoRegistro(null)
     if (!cliente || !mes || !meses.includes(mes)) return
     let vigente = true
     Promise.all([cotizar(cliente, mes), supabase.from('skus').select('sku, unidades_pallet, peso')]).then(([{ lineas, error }, s]) => {
@@ -105,11 +108,14 @@ export default function Cotizar() {
   }
 
   /** Baja un correo (.eml) que Outlook abre como mensaje nuevo, listo para Enviar. */
-  function correo() {
+  async function correo() {
     if (!cliente) return
-    const eml = emlDeCliente({ cliente: cliente.nombre, contacto: cliente.contacto, email: cliente.email, condicion_pago: cliente.condicion_pago, empaque_consignado: cliente.empaque_consignado, mes, lineas }, leerPlantilla())
-    bajar(nombreArchivo(cliente.nombre, mes), eml)
+    const plantilla = leerPlantilla()
+    const datos = { cliente: cliente.nombre, contacto: cliente.contacto, email: cliente.email, condicion_pago: cliente.condicion_pago, empaque_consignado: cliente.empaque_consignado, mes, lineas }
+    bajar(nombreArchivo(cliente.nombre, mes), emlDeCliente(datos, plantilla))
     setCorreoListo(true)
+    // Queda en el historial de listas enviadas (ficha del cliente y Enviar listas).
+    setAvisoRegistro(await registrarEnvios([filaEnvio(cliente.id, datos, plantilla, 'cotizar')]))
   }
 
   return (
@@ -165,8 +171,10 @@ export default function Cotizar() {
               Abrí el archivo que bajó el navegador: se abre en Outlook como mensaje nuevo, listo para revisar y apretar Enviar.
               {cliente && !destinatarios(cliente.email).length && ' Este cliente no tiene email cargado: escribilo en el campo Para.'}
               {' '}El texto del correo se cambia en Enviar listas.
+              {!avisoRegistro && ' Quedó registrado en la ficha del cliente; si al final no lo mandás, marcalo ahí como "No se envió".'}
             </p>
           )}
+          {avisoRegistro && <p className="text-sm text-amber-800">{avisoRegistro}</p>}
           {verPedido && cliente && <PegarPedido clienteNombre={cliente.nombre} mes={mes} precios={lineas} />}
           <Table>
             <TableHeader>
