@@ -2,10 +2,13 @@
 -- RESET: BORRA TODAS LAS TABLAS Y DATOS DE LA APP DE PRECIOS.
 -- No se puede deshacer. Usalo solo para empezar de cero.
 -- No toca los usuarios de login (Authentication > Users).
--- Después de esto, correr supabase/migrations/0001_esquema.sql y luego 0002, 0003, 0004, 0005, 0006 y 0007, en ese orden.
+-- Después de esto, correr las migraciones de supabase/migrations en orden:
+-- 0001, 0002, 0003, 0004, 0006, 0007, 0008, 0012, 0009, 0010, 0011, 0013,
+-- 0014, 0015, 0016 y 0017 (0005 no hace falta: la reemplaza 0007).
 -- =====================================================================
 
 -- Vistas
+drop view if exists public.v_envios_por_mes cascade;
 drop view if exists public.v_competencia cascade;
 drop view if exists public.v_estado_listas cascade;
 drop view if exists public.v_precios_detalle cascade;
@@ -18,6 +21,7 @@ drop view if exists public.v_historial_precios cascade;
 drop view if exists public.v_ultimo_precio cascade;
 
 -- Tablas (incluye nombres de versiones anteriores)
+drop table if exists public.listas_enviadas cascade;
 drop table if exists public.inflacion cascade;
 drop table if exists public.precios_competencia cascade;
 drop table if exists public.productos_competencia cascade;
@@ -35,6 +39,8 @@ drop table if exists public.niveles cascade;
 drop table if exists public.usuarios_autorizados cascade;
 
 -- Funciones
+drop function if exists public.completar_lista_enviada() cascade;
+drop function if exists public.meses_cotizables_todos() cascade;
 drop function if exists public.registrar_cambio_lista() cascade;
 drop function if exists public.ultima_lista_publicada() cascade;
 drop function if exists public.lista_vigente_publicada(date) cascade;
