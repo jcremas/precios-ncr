@@ -1,9 +1,14 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-function Table({ className, ...props }: React.ComponentProps<'table'>) {
+/**
+ * `fija`: para tablas largas. En pantallas medianas o grandes la tabla scrollea adentro de su
+ * caja (alto de la ventana) y los títulos de las columnas quedan fijos arriba.
+ */
+function Table({ className, fija, ...props }: React.ComponentProps<'table'> & { fija?: boolean }) {
   return (
-    <div className="relative w-full overflow-x-auto rounded-md border">
+    <div className={cn('relative w-full overflow-x-auto rounded-md border',
+      fija && 'md:max-h-[calc(100dvh-7rem)] md:overflow-y-auto [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-muted [&_thead_th]:shadow-[inset_0_-1px_0_var(--color-border)]')}>
       <table className={cn('w-full caption-bottom text-sm', className)} {...props} />
     </div>
   )

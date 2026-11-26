@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { grillasActivas, listasGenerales, mensajeError, preciosDeClientes } from '@/lib/datos'
-import { aInputMes, desdeInputMes, mesActual, mesSiguiente, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
+import { mesActual, mesSiguiente, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { listaVigente } from '@/lib/precios'
 import { useUsuarios } from '@/lib/usuarios'
 import { revisarPrecios } from '@/lib/controles'
@@ -15,8 +15,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { SelectorMes } from '@/components/SelectorMes'
+import { Ayuda } from '@/components/Ayuda'
 
 const TODOS = 'TODOS'
 /** 297.26 -> '297,26' (como se escribe en Argentina) */
@@ -212,14 +214,16 @@ export default function EnvioMensual() {
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       {dialogo}
       <Card>
         <CardHeader>
           <CardTitle>Ajuste mensual</CardTitle>
-          <CardDescription>
-            Para tus clientes especiales (los de otros usuarios los ajusta su dueño; los genéricos se actualizan al publicar la lista general). Elegí un cliente o TODOS, el mes y, si querés, un % de aumento sobre el último precio. A la derecha tenés la lista general y el precio mínimo: si un precio queda por debajo del mínimo se marca en rojo. Al guardar te avisa si algo quedó bajo el mínimo, sube más de 30% o baja respecto del último precio, por si es un error de tipeo.
-          </CardDescription>
+          <Ayuda resumen="Cargá los precios del mes de tus clientes especiales: elegí un cliente (o TODOS), el mes y, si querés, un % de aumento.">
+            <p>Los especiales de otros usuarios los ajusta su dueño; los genéricos se actualizan solos al publicar la lista general.</p>
+            <p>El % se aplica sobre el último precio de cada SKU. A la derecha tenés la lista general y el precio mínimo: si un precio queda por debajo del mínimo se marca en rojo.</p>
+            <p>Al guardar te avisa si algo quedó bajo el mínimo, sube más de 30% o baja respecto del último precio, por si es un error de tipeo.</p>
+          </Ayuda>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
           <div className="grid gap-2">
@@ -234,7 +238,7 @@ export default function EnvioMensual() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="mes">Mes a cargar</Label>
-            <Input id="mes" type="month" value={aInputMes(mesNuevo)} onChange={(e) => { const v = e.target.value; if (v) cambiarSinPerder(() => setMesNuevo(desdeInputMes(v))) }} />
+            <SelectorMes id="mes" value={mesNuevo} onChange={(v) => cambiarSinPerder(() => setMesNuevo(v))} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="aumento">% de aumento</Label>
@@ -255,7 +259,8 @@ export default function EnvioMensual() {
 
       {seleccion && (
         <div className="grid gap-3">
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Barra fija: el botón Guardar queda a la vista al bajar por la tabla. */}
+          <div className="sticky top-[3.4rem] z-[15] flex flex-wrap items-center gap-3 rounded-md border bg-background px-3 py-2 shadow-sm">
             <p className="text-sm text-muted-foreground">
               {filas.length} SKU(s) · {aGuardar.length} para guardar en {nombreMes(mesNuevo)}
               {correcciones > 0 && ` · ${correcciones} corrección(es)`}
@@ -266,7 +271,7 @@ export default function EnvioMensual() {
               {guardando ? 'Guardando…' : `Guardar ${nombreMes(mesNuevo)}`}
             </Button>
           </div>
-          <Table>
+          <Table fija>
             <TableHeader>
               <TableRow>
                 {seleccion === TODOS && <TableHead>Cliente</TableHead>}

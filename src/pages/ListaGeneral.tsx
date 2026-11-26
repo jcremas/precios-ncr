@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { listasGenerales, mensajeError } from '@/lib/datos'
-import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
+import { aInputMes, mesActual, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { exportarExcel, listaVigente, precioConDescuento } from '@/lib/precios'
 import type { ListaGeneral as Lista, Sku } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
@@ -15,8 +15,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { SelectorMes } from '@/components/SelectorMes'
+import { Ayuda } from '@/components/Ayuda'
 
 const aTexto = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','))
 const aNumero = (t: string) => Number(t.trim().replace(/\$|\s/g, '').replace(/\.(?=\d{3}(,|$))/g, '').replace(',', '.'))
@@ -197,20 +199,22 @@ export default function ListaGeneral() {
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       {dialogo}
       <Card>
         <CardHeader>
           <CardTitle>Lista general</CardTitle>
-          <CardDescription>
-            Un precio de LISTA por SKU y mes, más el precio mínimo (piso) de referencia. Los demás niveles se calculan con su descuento y se redondean a 1 decimal; los SKUs "sin descuento" valen lo mismo en todos los niveles. Guardá la lista y después publicala: mientras no la publiques es un borrador y no llega a los clientes genéricos ni a Cotizar. Si corregís un precio ya guardado, el valor anterior queda registrado. Al guardar te avisa si una LISTA queda bajo su mínimo, sube más de 30% o baja contra la lista anterior.
-          </CardDescription>
+          <Ayuda resumen="Un precio de LISTA y un mínimo por SKU y mes. Guardá la lista y después publicala para que llegue a los genéricos.">
+            <p>Los demás niveles se calculan con su descuento y se redondean a 1 decimal; los SKUs "sin descuento" valen lo mismo en todos los niveles.</p>
+            <p>Mientras no la publiques es un borrador y no llega a los clientes genéricos ni a Cotizar. Si corregís un precio ya guardado, el valor anterior queda registrado.</p>
+            <p>Al guardar te avisa si una LISTA queda bajo su mínimo, sube más de 30% o baja contra la lista anterior.</p>
+          </Ayuda>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
           <div className="w-full"><AvisoSoloAdmin que="la lista general" /></div>
           <div className="grid gap-2">
             <Label htmlFor="mes">Mes de la lista</Label>
-            <Input id="mes" type="month" className="w-44" value={aInputMes(mes)} onChange={(e) => e.target.value && cambiarMes(desdeInputMes(e.target.value))} />
+            <SelectorMes id="mes" value={mes} onChange={cambiarMes} />
           </div>
           {esAdmin && <div className="grid gap-2">
             <Label htmlFor="aum">% sobre la lista anterior</Label>
@@ -236,7 +240,8 @@ export default function ListaGeneral() {
         <p className={estado.tipo === 'ok' ? 'rounded-md bg-green-50 p-3 text-sm text-green-800' : 'rounded-md bg-red-50 p-3 text-sm text-red-800'}>{estado.texto}</p>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Barra fija: Guardar y Publicar quedan a la vista al bajar por la tabla. */}
+      <div className="sticky top-[3.4rem] z-[15] flex flex-wrap items-center gap-3 rounded-md border bg-background px-3 py-2 shadow-sm">
         <p className="text-sm text-muted-foreground">
           {delMes.size ? `${delMes.size} SKU(s) guardados en ${nombreMes(mes)}` : `Todavía no hay lista de ${nombreMes(mes)}`}
           {est && (est.publicada_en
@@ -254,7 +259,7 @@ export default function ListaGeneral() {
       </div>
 
       <fieldset disabled={!esAdmin} className="contents">
-      <Table>
+      <Table fija>
         <TableHeader>
           <TableRow>
             <TableHead>SKU</TableHead>

@@ -13,6 +13,13 @@ export function mesSiguiente(iso: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** Suma (o resta) meses a 'AAAA-MM-01'. */
+export function sumarMeses(iso: string, n: number): string {
+  const [a, m] = iso.split('-').map(Number)
+  const d = new Date(Date.UTC(a, m - 1 + n, 1))
+  return d.toISOString().slice(0, 10)
+}
+
 /** Mes actual como 'AAAA-MM-01' */
 export function mesActual(): string {
   const d = new Date()

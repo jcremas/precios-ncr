@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { ArrowLeft, Calculator, Pencil, Swords, TrendingUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { listasGenerales, mensajeError, preciosDeClientes } from '@/lib/datos'
-import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
+import { mesActual, nombreMes, pct, precio, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { listaVigente, precioConDescuento } from '@/lib/precios'
 import { etiquetaNivel, useNiveles } from '@/lib/niveles'
 import { useUsuarios } from '@/lib/usuarios'
@@ -23,6 +23,8 @@ import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { SelectorMes } from '@/components/SelectorMes'
+import { Ayuda } from '@/components/Ayuda'
 
 const aTexto = (n: number) => String(n).replace('.', ',')
 const aNumero = (t: string) => Number(t.replace(',', '.'))
@@ -103,7 +105,7 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="mes-ini">Mes</Label>
-            <Input id="mes-ini" type="month" className="w-44" value={aInputMes(mes)} onChange={(e) => e.target.value && setMes(desdeInputMes(e.target.value))} />
+            <SelectorMes id="mes-ini" value={mes} onChange={setMes} />
           </div>
           <Button className="ml-auto" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : `Guardar lista de ${nombreMes(mes)}`}</Button>
         </div>
@@ -142,7 +144,7 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
 
 export default function ClienteDetalle() {
   const { descuento, nombre } = useNiveles()
-  const { esAdmin, usuarios, nombreDe, puedeEditar } = useUsuarios()
+  const { esAdmin, usuarios, nombreDe, puedeEditar, yo } = useUsuarios()
   const id = Number(useParams().id)
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [skus, setSkus] = useState<Sku[]>([])
@@ -234,7 +236,7 @@ export default function ClienteDetalle() {
   const tildados = grilla.filter((g) => g.activo).map((g) => g.sku)
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       <Link to="/clientes" className="flex items-center gap-1 text-sm text-muted-foreground hover:underline"><ArrowLeft className="size-4" /> Clientes</Link>
 
       <Card>
@@ -244,7 +246,16 @@ export default function ClienteDetalle() {
           {cliente.nivel_id != null && <Badge variant="outline">{nombre(cliente.nivel_id)} ({String(descuento(cliente.nivel_id)).replace('.', ',')}%)</Badge>}
           {!cliente.cotiza && <Badge variant="baja">No cotiza</Badge>}
           {!cliente.nro_cliente && <Badge variant="alerta">Falta código de cliente</Badge>}
-          {!editando && editable && <Button className="ml-auto" variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}
+          {/* Accesos directos: entran a cada pantalla con este cliente ya elegido. */}
+          <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+            {cliente.cotiza && <Button asChild variant="outline" size="sm" title="Ver sus precios, copiarlos o armar el correo para Outlook">
+              <Link to={`/cotizar?cliente=${cliente.id}`}><Calculator /> Cotizar / correo</Link></Button>}
+            {(cliente.dueno === undefined || cliente.dueno === yo) && cliente.modalidad === 'ESPECIAL' && cliente.cotiza && precios.length > 0 && <Button asChild variant="outline" size="sm" title="Cargar los precios del mes en Ajuste mensual">
+              <Link to={`/ajuste?cliente=${cliente.id}`}><TrendingUp /> Ajustar precios</Link></Button>}
+            <Button asChild variant="outline" size="sm" title="Precios de la competencia en este cliente">
+              <Link to={`/competencia?cliente=${cliente.id}`}><Swords /> Competencia</Link></Button>
+            {!editando && editable && <Button variant="outline" size="sm" onClick={() => setEditando(true)}><Pencil /> Editar</Button>}
+          </div>
         </CardHeader>
         <CardContent>
           {cliente.dueno !== undefined && (
@@ -288,7 +299,7 @@ export default function ClienteDetalle() {
       <div className="grid gap-3">
         <div className="flex flex-wrap items-end gap-3">
           <h2 className="mr-auto text-lg font-semibold">Historial de precios</h2>
-          {editable && <><Combobox className="w-80" value={skuNuevo} onChange={setSkuNuevo} placeholder={`Tildar otro SKU para este cliente (${disponibles.length} disponibles)…`}
+          {editable && <><Combobox className="w-full sm:w-80" value={skuNuevo} onChange={setSkuNuevo} placeholder={`Tildar otro SKU para este cliente (${disponibles.length} disponibles)…`}
             opciones={disponibles.map((s) => ({ value: String(s.sku), label: s.descripcion, detalle: String(s.sku) }))} />
           <Button variant="secondary" onClick={agregarSku} disabled={!skuNuevo}>Agregar</Button></>}
         </div>
@@ -296,10 +307,10 @@ export default function ClienteDetalle() {
           <input type="checkbox" checked={verTodos} onChange={(e) => setVerTodos(e.target.checked)} />
           Ver todos los SKUs activos (también los que este cliente nunca tuvo), para tildarlos desde la tabla
         </label>}
-        <p className="text-xs text-muted-foreground">
-          La columna "Se cotiza" es el mapa de SKUs: destildá los que no se le cotizan. Un SKU recién tildado se cotiza cuando tenga precio cargado (en Ajuste mensual, si es especial). Debajo de cada precio va la variación contra el mes anterior: <Badge variant="alerta">+30%</Badge> aumento atípico (más de {UMBRAL_AUMENTO_ATIPICO}%), <Badge variant="baja">-%</Badge> baja.
-        </p>
-        <Table>
+        <Ayuda resumen={<>Debajo de cada precio va la variación contra el mes anterior: <Badge variant="alerta">+30%</Badge> aumento atípico (más de {UMBRAL_AUMENTO_ATIPICO}%), <Badge variant="baja">-%</Badge> baja.</>}>
+          <p>La columna "Se cotiza" es el mapa de SKUs: destildá los que no se le cotizan. Un SKU recién tildado se cotiza cuando tenga precio cargado (en Ajuste mensual, si es especial).</p>
+        </Ayuda>
+        <Table fija>
           <TableHeader>
             <TableRow>
               <TableHead>Se cotiza</TableHead>

@@ -163,8 +163,8 @@ export default function Skus() {
   }
 
   return (
-    <div className="grid gap-6">
-      <div className="flex items-center gap-2">
+    <div className="grid gap-6 [&>*]:min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold">SKUs</h1>
         {esAdmin && <>
         <Button variant="outline" onClick={() => setVerPegar(!verPegar)}>Pegar datos desde Excel</Button>
@@ -204,7 +204,7 @@ export default function Skus() {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <fieldset disabled={!esAdmin} className="contents">
-      <Table>
+      <Table fija>
         <TableHeader>
           <TableRow>
             <TableHead>SKU</TableHead>

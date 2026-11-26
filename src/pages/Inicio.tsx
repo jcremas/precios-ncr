@@ -267,7 +267,7 @@ export default function Inicio() {
 
   const quien = verTodos ? 'todos los clientes' : 'tus clientes'
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 [&>*]:min-w-0">
       <div className="flex flex-wrap items-end gap-3">
         <div className="mr-auto">
           <h1 className="text-xl font-semibold">Inicio · {nombreMes(mes)}</h1>
@@ -321,7 +321,7 @@ export default function Inicio() {
           detalle={`Más baratos que el genérico más agresivo`} a="#agresivo" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         {/* ---------- Lista general ---------- */}
         <Card id="lista">
           <CardHeader>
@@ -385,7 +385,7 @@ export default function Inicio() {
       </div>
 
       {/* ---------- Gráficos ---------- */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <Card id="evolucion">
           <CardHeader className="flex flex-wrap items-end justify-between gap-2">
             <div className="grid gap-1.5">
@@ -467,7 +467,7 @@ export default function Inicio() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         {/* ---------- Ajuste de especiales para revisar ---------- */}
         <Card id="ajuste">
           <CardHeader>

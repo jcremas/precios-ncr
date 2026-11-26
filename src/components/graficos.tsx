@@ -120,7 +120,7 @@ export function GraficoEvolucion({ puntos }: { puntos: PuntoEvolucion[] }) {
   const h = hover != null ? puntos[hover] : null
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0">
       <svg width={ancho} height={alto} role="img" aria-label="Evolución del precio del SKU"
         onPointerMove={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
@@ -197,7 +197,7 @@ export function GraficoAjustes({ variaciones }: { variaciones: number[] }) {
   const color = (t: (typeof TRAMOS)[number]) => (t.hasta <= -0.05 ? COLOR.naranja : t.desde >= 0.05 ? COLOR.azul : COLOR.gris)
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0">
       <svg width={ancho} height={alto} role="img" aria-label="Distribución de los ajustes del mes">
         {ticks.map((t) => (
           <g key={t}>
@@ -263,7 +263,7 @@ export function GraficoRangos({ filas }: { filas: RangoSku[] }) {
   const h = hover != null ? filas[hover] : null
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0">
       <svg width={ancho} height={alto} role="img" aria-label="Precios de cada SKU respecto de la lista">
         {ticks.map((t) => (
           <g key={t}>
@@ -338,7 +338,7 @@ export function GraficoAcumulado({ meses, series }: { meses: string[]; series: S
   const cadaCuanto = Math.ceil(meses.length / Math.max(1, Math.floor((ancho - m.izq - m.der) / 64)))
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0">
       <svg width={ancho} height={alto} role="img" aria-label="Aumento acumulado contra la inflación"
         onPointerMove={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
