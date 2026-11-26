@@ -10,6 +10,7 @@ import { useUsuarios } from '@/lib/usuarios'
 import { nombreModalidad, type Cliente, type ListaGeneral, type PrecioCliente, type Sku } from '@/lib/tipos'
 import { traducirError, type DatosCliente } from '@/lib/clientes'
 import { FormCliente } from '@/components/FormCliente'
+import { ListasEnviadas } from '@/components/ListasEnviadas'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -318,6 +319,8 @@ export default function ClienteDetalle() {
           </TableBody>
         </Table>
       </div>
+
+      <ListasEnviadas clienteId={id} dueno={cliente.dueno} />
     </div>
   )
 }

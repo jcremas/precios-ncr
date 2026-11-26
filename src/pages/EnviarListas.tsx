@@ -9,6 +9,7 @@ import {
   MARCAS, PLANTILLA_INICIAL, armarZip, bajar, destinatarios, emlDeCliente, guardarPlantilla, leerPlantilla, nombreArchivo,
   type LineaCorreo, type Plantilla,
 } from '@/lib/correo'
+import { enviosPorMes, fecha, filaEnvio, registrarEnvios } from '@/lib/envios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 type ClienteEnvio = Pick<Cliente, 'id' | 'nombre' | 'nro_cliente' | 'modalidad' | 'nivel_id' | 'contacto' | 'email' | 'condicion_pago' | 'empaque_consignado' | 'dueno'>
 
-interface Resultado { armados: number; sinPrecios: string[]; sinEmail: string[]; errores: string[] }
+interface Resultado { armados: number; sinPrecios: string[]; sinEmail: string[]; errores: string[]; avisoRegistro: string | null }
 
 /** Meses con lista de cada cliente (id -> meses, del más nuevo al más viejo).
  *  Usa meses_cotizables_todos() (0011); si todavía no se corrió, pregunta
@@ -65,6 +66,28 @@ export default function EnviarListas() {
   const [verTexto, setVerTexto] = useState(false)
   const [avance, setAvance] = useState<string | null>(null)
   const [resultado, setResultado] = useState<Resultado | null>(null)
+  // Envíos registrados (0017): cliente -> mes de lista -> fecha del último envío.
+  // null = todavía cargando o falta la migración (sinRegistro).
+  const [envios, setEnvios] = useState<Map<number, Map<string, string>> | null>(null)
+  const [sinRegistro, setSinRegistro] = useState(false)
+  const [soloSinEnviar, setSoloSinEnviar] = useState(false)
+
+  async function cargarEnvios() {
+    try {
+      const filas = await enviosPorMes()
+      if (!filas) return setSinRegistro(true)
+      const mapa = new Map<number, Map<string, string>>()
+      for (const f of filas) {
+        const m = mapa.get(f.cliente_id) ?? new Map<string, string>()
+        m.set(f.mes, f.ultimo_envio)
+        mapa.set(f.cliente_id, m)
+      }
+      setEnvios(mapa)
+    } catch (e) {
+      setError(mensajeError(e))
+    }
+  }
+  useEffect(() => { cargarEnvios() }, [])
 
   useEffect(() => {
     supabase.from('clientes').select('*')
@@ -87,6 +110,17 @@ export default function EnviarListas() {
     return mes ? (l.includes(mes) ? mes : null) : (l[0] ?? null)
   }
   const cuantos = (m: string) => clientes.filter((c) => meses?.get(c.id)?.includes(m)).length
+  /** Fecha del último envío de la lista que le toca (mesDe), o null si no se le mandó. */
+  const enviadoEn = (id: number) => {
+    const m = mesDe(id)
+    return m ? envios?.get(id)?.get(m) ?? null : null
+  }
+  /** Último envío de cualquier lista: { mes de la lista, fecha }. */
+  const ultimoEnvio = (id: number) => {
+    let u: { mes: string; en: string } | null = null
+    for (const [mes, en] of envios?.get(id) ?? []) if (!u || en > u.en) u = { mes, en }
+    return u
+  }
   function cambiarMes(m: string) {
     setMes(m)
     setTildados(new Set())
@@ -100,8 +134,10 @@ export default function EnviarListas() {
     (!modalidad || c.modalidad === modalidad) &&
     (!nivel || String(c.nivel_id) === nivel) &&
     (!soloConEmail || destinatarios(c.email).length > 0) &&
+    (!soloSinEnviar || !enviadoEn(c.id)) &&
     (!f || c.nombre.toUpperCase().includes(f) || (c.nro_cliente ?? '').toUpperCase().includes(f))),
-  [clientes, meses, mes, duenoElegido, modalidad, nivel, soloConEmail, f])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [clientes, meses, mes, duenoElegido, modalidad, nivel, soloConEmail, soloSinEnviar, envios, f])
 
   const tildables = visibles.filter((c) => mesDe(c.id))
   const todosVisiblesTildados = tildables.length > 0 && tildables.every((c) => tildados.has(c.id))
@@ -129,7 +165,8 @@ export default function EnviarListas() {
     const { data: skus } = await supabase.from('skus').select('sku, unidades_pallet')
     const pallet = new Map((skus ?? []).map((x) => [x.sku as number, x.unidades_pallet as number | null]))
     const archivos: { nombre: string; contenido: string }[] = []
-    const r: Resultado = { armados: 0, sinPrecios: [], sinEmail: [], errores: [] }
+    const r: Resultado = { armados: 0, sinPrecios: [], sinEmail: [], errores: [], avisoRegistro: null }
+    const registro: ReturnType<typeof filaEnvio>[] = []
     let hechos = 0
     // De a 4 clientes a la vez, para no saturar la base.
     const cola = [...elegidos]
@@ -143,10 +180,9 @@ export default function EnviarListas() {
         if (!filas.length) { r.sinPrecios.push(c.nombre); continue }
         const lineas = filas.map((l) => ({ ...l, pallet: pallet.get(l.sku) ?? null }))
         const mesCorreo = filas[0].mes
-        archivos.push({
-          nombre: nombreArchivo(c.nombre, mesCorreo),
-          contenido: emlDeCliente({ cliente: c.nombre, contacto: c.contacto, email: c.email, condicion_pago: c.condicion_pago, empaque_consignado: c.empaque_consignado, mes: mesCorreo, lineas }, plantilla),
-        })
+        const datos = { cliente: c.nombre, contacto: c.contacto, email: c.email, condicion_pago: c.condicion_pago, empaque_consignado: c.empaque_consignado, mes: mesCorreo, lineas }
+        archivos.push({ nombre: nombreArchivo(c.nombre, mesCorreo), contenido: emlDeCliente(datos, plantilla) })
+        registro.push(filaEnvio(c.id, datos, plantilla, 'enviar_listas'))
         r.armados++
         if (!destinatarios(c.email).length) r.sinEmail.push(c.nombre)
       }
@@ -157,6 +193,13 @@ export default function EnviarListas() {
     else if (archivos.length > 1) bajar(`Listas de precios ${mes ? nombreMes(mes) : new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.zip`, armarZip(archivos))
     r.sinPrecios.sort()
     r.sinEmail.sort()
+    // Queda registrado (ficha del cliente y columna "Último envío").
+    if (registro.length) {
+      setAvance('Registrando envíos…')
+      r.avisoRegistro = await registrarEnvios(registro)
+      if (!r.avisoRegistro) await cargarEnvios()
+    }
+    setTildados(new Set())
     setAvance(null)
     setResultado(r)
   }
@@ -179,6 +222,7 @@ export default function EnviarListas() {
             Tildá los clientes y apretá "Bajar correos". La app arma un correo por cliente (para su email, con asunto y la tabla de precios) y los baja juntos en un .zip.
             Abrí el .zip, hacé doble clic en cada correo: se abre en Outlook como mensaje nuevo, lo revisás y apretás Enviar. La app no envía nada sola y no quedan en Borradores salvo que los cierres guardándolos.
             En "Precios de" elegí un mes para ver solo los clientes que tienen lista ese mes, o "La última lista de cada cliente" para verlos a todos con el mes de su última lista. Los clientes NO COTIZA no aparecen.
+            Cada correo que se baja queda registrado (columna "Último envío" y ficha del cliente). "Sin enviar este mes" muestra los clientes a los que todavía no se les armó el correo de la lista de ese mes. Si al final no mandaste uno, marcalo como "No se envió" en la ficha del cliente.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -220,6 +264,9 @@ export default function EnviarListas() {
             <label className="flex h-9 items-center gap-2 text-sm">
               <input type="checkbox" checked={soloConEmail} onChange={(e) => setSoloConEmail(e.target.checked)} /> Solo con email
             </label>
+            <label className="flex h-9 items-center gap-2 text-sm" title={sinRegistro ? 'Falta correr la migración 0017 en Supabase' : 'Clientes a los que todavía no se les armó el correo con la lista de ese mes'}>
+              <input type="checkbox" disabled={sinRegistro} checked={soloSinEnviar} onChange={(e) => setSoloSinEnviar(e.target.checked)} /> Sin enviar este mes
+            </label>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -257,8 +304,10 @@ export default function EnviarListas() {
               {resultado.sinEmail.length > 0 && <p className="text-amber-800">Sin email cargado (escribilo en el campo Para de Outlook, o cargalo en la ficha del cliente): {resultado.sinEmail.join(', ')}.</p>}
               {resultado.sinPrecios.length > 0 && <p className="text-amber-800">Sin SKUs tildados con precio (no se armó correo): {resultado.sinPrecios.join(', ')}.</p>}
               {resultado.errores.length > 0 && <p className="text-destructive">Con error: {resultado.errores.join('; ')}.</p>}
+              {resultado.avisoRegistro && <p className="text-amber-800">{resultado.avisoRegistro}</p>}
             </div>
           )}
+          {sinRegistro && <p className="text-sm text-amber-800">Para registrar los envíos (columna "Último envío" y filtro "Sin enviar este mes") falta correr la migración 0017 en Supabase. Mientras tanto los correos se bajan igual.</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
         </CardContent>
       </Card>
@@ -273,6 +322,7 @@ export default function EnviarListas() {
             <TableHead>Código</TableHead>
             <TableHead>Tipo</TableHead>
             <TableHead>{mes ? 'Lista' : 'Última lista'}</TableHead>
+            {!sinRegistro && <TableHead>Último envío</TableHead>}
             <TableHead>Empaque</TableHead>
             <TableHead>Contacto</TableHead>
             <TableHead>Email</TableHead>
@@ -282,6 +332,8 @@ export default function EnviarListas() {
           {visibles.map((c) => {
             const para = destinatarios(c.email)
             const m = mesDe(c.id)
+            const u = ultimoEnvio(c.id)
+            const enviadoEsta = enviadoEn(c.id)
             return (
               <TableRow key={c.id} className={m ? 'cursor-pointer' : 'text-muted-foreground'} onClick={() => tildar(c.id, !tildados.has(c.id))}>
                 <TableCell>
@@ -291,6 +343,16 @@ export default function EnviarListas() {
                 <TableCell className="font-mono text-xs">{c.nro_cliente}</TableCell>
                 <TableCell className="whitespace-nowrap">{nombreModalidad(c.modalidad)}{c.nivel_id != null ? ` · ${nombreNivel(c.nivel_id)}` : ''}</TableCell>
                 <TableCell className="whitespace-nowrap">{m ? nombreMes(m) : meses ? <Badge variant="outline">sin lista</Badge> : '…'}</TableCell>
+                {!sinRegistro && (
+                  <TableCell className="whitespace-nowrap" title={enviadoEsta ? `Lista de ${m && nombreMes(m)} armada el ${fecha(enviadoEsta)}` : m ? `Todavía no se armó el correo con la lista de ${nombreMes(m)}` : undefined}>
+                    {!envios ? '…' : u ? (
+                      <span className="flex items-center gap-2">
+                        {fecha(u.en)} <span className="text-xs text-muted-foreground">({nombreMes(u.mes)})</span>
+                        {enviadoEsta ? <Badge variant="secondary">✓</Badge> : m && <Badge variant="alerta">sin enviar {nombreMes(m)}</Badge>}
+                      </span>
+                    ) : m ? <Badge variant="outline">nunca</Badge> : '—'}
+                  </TableCell>
+                )}
                 <TableCell className="whitespace-nowrap">{c.empaque_consignado ? 'Consignado' : 'Se cobra'}</TableCell>
                 <TableCell>{c.contacto}</TableCell>
                 <TableCell>{para.length ? para.join(', ') : <Badge variant="outline">sin email</Badge>}</TableCell>
