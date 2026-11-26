@@ -33,7 +33,8 @@ export function traducirError(e: unknown) {
   const m = mensajeError(e)
   if (m.includes('clientes_nombre_unico')) return 'Ya existe un cliente con ese nombre.'
   if (m.includes('clientes_nro_cliente_key')) return 'Ya existe un cliente con ese código.'
-  if (m.includes('clientes_condicion_pago_30')) return 'La condición de pago admite hasta 30 caracteres.'
+  if (m.includes('clientes_condicion_pago_30')) return 'La condición de pago admite hasta 30 caracteres (falta correr la migración 0012 para llevarla a 50).'
+  if (m.includes('clientes_condicion_pago_50')) return 'La condición de pago admite hasta 50 caracteres.'
   if (m.includes('clientes_generico_con_nivel')) return 'Un cliente genérico que cotiza necesita su nivel de descuento.'
   return m
 }

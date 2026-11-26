@@ -73,7 +73,7 @@ export function FormCliente({ inicial, onGuardar, onCancelar }: {
       </div>
       {campo('segmento', 'Segmento')}
       {campo('marca_principal', 'Marca principal')}
-      {campo('condicion_pago', 'Condiciones de pago (hasta 30 caracteres)', { maxLength: 30 })}
+      {campo('condicion_pago', 'Condiciones de pago (hasta 50 caracteres)', { maxLength: 50 })}
       {campo('contacto', 'Nombre de contacto')}
       <div className="grid gap-2">
         {campo('email', 'Email de contacto', { placeholder: 'compras@cliente.com; otro@cliente.com' })}
