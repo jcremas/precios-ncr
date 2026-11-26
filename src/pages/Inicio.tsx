@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { COLOR, GraficoAjustes, GraficoEvolucion, GraficoRangos, Leyenda, type PuntoEvolucion } from '@/components/graficos'
 
 /** Fila de v_estado_listas (0006). */
 interface EstadoLista { mes: string; skus: number; publicada_en: string | null; ultimo_cambio: string | null }
@@ -203,6 +204,39 @@ export default function Inicio() {
       .sort((a, b) => a.descripcion.localeCompare(b.descripcion))
   }, [filas, grupoSku])
 
+  // ---------- Evolución de un SKU (últimos 12 meses) ----------
+  const [skuEvol, setSkuEvol] = useState('')
+  // Por defecto, el SKU que más clientes compran este mes.
+  const skuElegido = skuEvol || String([...porSku].sort((a, b) => b.clientes - a.clientes)[0]?.sku ?? '')
+  type FilaEvol = Pick<PrecioDetalle, 'mes' | 'cliente_id' | 'precio' | 'lista' | 'precio_minimo' | 'modalidad'>
+  const [evolucion, setEvolucion] = useState<FilaEvol[]>([])
+  useEffect(() => {
+    if (!skuElegido) return
+    let vigente = true
+    traerTodo<FilaEvol>((d, h) => supabase.from('v_precios_detalle').select('mes, cliente_id, precio, lista, precio_minimo, modalidad')
+      .eq('sku', Number(skuElegido)).lte('mes', mes).gte('mes', restarMeses(mes, 11)).order('mes').order('cliente_id').range(d, h))
+      .then((rows) => vigente && setEvolucion(rows))
+      .catch((e) => vigente && setError(mensajeError(e)))
+    return () => { vigente = false }
+  }, [skuElegido, mes])
+  const puntosEvolucion = useMemo<PuntoEvolucion[]>(() => {
+    const salida: PuntoEvolucion[] = []
+    for (let i = 11; i >= 0; i--) {
+      const m = restarMeses(mes, i)
+      const del = evolucion.filter((r) => r.mes === m && porId.has(r.cliente_id) && (!grupoSku || r.modalidad === grupoSku))
+      const v = del.map((r) => Number(r.precio))
+      const ref = evolucion.find((r) => r.mes === m)
+      salida.push({
+        mes: m, clientes: v.length,
+        promedio: promedio(v), min: v.length ? Math.min(...v) : null, max: v.length ? Math.max(...v) : null,
+        lista: ref?.lista != null ? Number(ref.lista) : null, piso: ref?.precio_minimo != null ? Number(ref.precio_minimo) : null,
+      })
+    }
+    // Arranca en el primer mes con datos.
+    const primero = salida.findIndex((p) => p.promedio != null || p.lista != null)
+    return primero < 0 ? [] : salida.slice(primero)
+  }, [evolucion, mes, porId, grupoSku])
+
   function exportarSkus() {
     exportarExcel(`precios-por-sku-${aInputMes(mes)}`,
       ['SKU', 'Producto', 'Clientes', 'Mínimo', 'Cliente mínimo', 'Promedio', 'Máximo', 'Cliente máximo', 'Lista', 'Piso', 'Dispersión %'],
@@ -322,6 +356,44 @@ export default function Inicio() {
                 </Table>
               </div>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ---------- Gráficos ---------- */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card id="evolucion">
+          <CardHeader className="flex flex-wrap items-end justify-between gap-2">
+            <div className="grid gap-1.5">
+              <CardTitle>Evolución de un SKU</CardTitle>
+              <CardDescription>Últimos 12 meses: lista general, lo que pagan {quien} en promedio (y del más barato al más caro) y el piso.</CardDescription>
+            </div>
+            <Select aria-label="SKU" className="w-56" value={skuElegido} onChange={(e) => setSkuEvol(e.target.value)}>
+              {porSku.map((s) => <option key={s.sku} value={s.sku}>{s.descripcion}</option>)}
+            </Select>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <Leyenda items={[
+              { color: COLOR.azul, nombre: 'Lista', forma: 'linea' },
+              { color: COLOR.naranja, nombre: 'Promedio clientes', forma: 'linea' },
+              { color: COLOR.naranja, nombre: 'Más barato a más caro', forma: 'banda' },
+              { color: COLOR.gris, nombre: 'Piso', forma: 'guiones' },
+            ]} />
+            <GraficoEvolucion puntos={puntosEvolucion} />
+          </CardContent>
+        </Card>
+        <Card id="distribucion">
+          <CardHeader>
+            <CardTitle>Cómo se ajustaron los especiales</CardTitle>
+            <CardDescription>Cuántos precios de {nombreMes(mes)} bajaron, quedaron igual o subieron, y cuánto, contra su precio anterior.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <Leyenda items={[
+              { color: COLOR.naranja, nombre: 'Bajaron', forma: 'barra' },
+              { color: COLOR.gris, nombre: 'Igual', forma: 'barra' },
+              { color: COLOR.azul, nombre: 'Subieron', forma: 'barra' },
+            ]} />
+            <GraficoAjustes variaciones={conVar.map((m) => m.var!)} />
           </CardContent>
         </Card>
       </div>
@@ -471,6 +543,20 @@ export default function Inicio() {
         </CardHeader>
         <CardContent>
           {!cargando && !porSku.length && <p className="py-2 text-sm text-muted-foreground">No hay precios de {nombreMes(mes)} para este grupo.</p>}
+          {porSku.some((s) => s.lista) && (
+            <div className="mb-4 grid gap-2">
+              <Leyenda items={[
+                { color: COLOR.naranja, nombre: 'Del más barato al más caro', forma: 'linea' },
+                { color: COLOR.naranja, nombre: 'Promedio', forma: 'punto' },
+                { color: COLOR.gris, nombre: 'Piso', forma: 'guiones' },
+                { color: COLOR.azul, nombre: 'Lista (0%)', forma: 'linea' },
+              ]} />
+              <GraficoRangos filas={porSku.filter((s) => s.lista).map((s) => ({
+                sku: s.sku, descripcion: s.descripcion, clientes: s.clientes, min: s.min.precio, max: s.max.precio,
+                promedio: s.promedio, lista: s.lista!, piso: s.piso, clienteMin: s.min.cliente, clienteMax: s.max.cliente,
+              }))} />
+            </div>
+          )}
           {porSku.length > 0 && (
             <Table>
               <TableHeader>
