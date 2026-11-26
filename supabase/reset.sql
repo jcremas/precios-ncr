@@ -18,6 +18,7 @@ drop view if exists public.v_historial_precios cascade;
 drop view if exists public.v_ultimo_precio cascade;
 
 -- Tablas (incluye nombres de versiones anteriores)
+drop table if exists public.inflacion cascade;
 drop table if exists public.precios_competencia cascade;
 drop table if exists public.productos_competencia cascade;
 drop table if exists public.competidores cascade;
@@ -56,6 +57,7 @@ drop function if exists public.preparar_grilla_especial() cascade;
 drop function if exists public.preparar_grilla() cascade;
 drop function if exists public.agregar_sku_a_genericos() cascade;
 drop function if exists public.clave_cambiada() cascade;
+drop function if exists public.inflacion_tocar() cascade;
 drop function if exists public.completar_precio_competencia() cascade;
 drop function if exists public.propagar_producto_competencia() cascade;
 drop function if exists public.transferir_cliente(bigint, text) cascade;

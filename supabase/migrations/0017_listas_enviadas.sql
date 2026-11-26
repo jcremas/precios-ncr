@@ -18,8 +18,7 @@
 --     cliente o el administrador. Solo se puede cambiar esa marca.
 --   * Borrar: solo el administrador.
 --
--- (El número 0016 queda para otro cambio que se está armando en paralelo.)
--- Se puede volver a correr. Requiere 0013.
+-- Se puede volver a correr. Requiere 0013 (va después de 0016_inflacion).
 -- =====================================================================
 
 create table if not exists public.listas_enviadas (

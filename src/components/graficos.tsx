@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { nombreMes, pct, precio } from '@/lib/formato'
 
 /* Gráficos simples en SVG (sin librerías).
@@ -9,6 +9,7 @@ import { nombreMes, pct, precio } from '@/lib/formato'
 export const COLOR = {
   azul: '#257de0',
   naranja: '#f47230',
+  aqua: '#00b894',
   gris: '#8a8a8a',
   grilla: '#ececec',
   eje: '#d4d4d4',
@@ -17,15 +18,16 @@ export const COLOR = {
 
 /** Ancho real del contenedor, para dibujar el SVG a medida. */
 function useAncho<T extends HTMLElement>() {
-  const ref = useRef<T>(null)
+  // Ref por función: el contenedor puede aparecer después (cuando llegan los datos).
+  const [nodo, setNodo] = useState<T | null>(null)
   const [ancho, setAncho] = useState(600)
   useEffect(() => {
-    if (!ref.current) return
+    if (!nodo) return
     const ro = new ResizeObserver(([e]) => setAncho(Math.max(280, Math.floor(e.contentRect.width))))
-    ro.observe(ref.current)
+    ro.observe(nodo)
     return () => ro.disconnect()
-  }, [])
-  return { ref, ancho }
+  }, [nodo])
+  return { ref: setNodo, ancho }
 }
 
 /** Escala lineal. */
@@ -292,6 +294,91 @@ export function GraficoRangos({ filas }: { filas: RangoSku[] }) {
           <div className="ml-5 text-muted-foreground">más caro {precio(h.max)} ({h.clienteMax})</div>
           <FilaTip color={COLOR.azul} nombre="lista" valor={precio(h.lista)} />
           {h.piso != null && <FilaTip color={COLOR.gris} nombre="piso" valor={`${precio(h.piso)} · ${pct(rel(h.piso, h.lista))}`} linea={false} />}
+        </Tooltip>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 4. Aumento acumulado (en %) de varias series desde un mes base, para
+//    compararlas con la inflación. Todas en el mismo eje: % desde el inicio.
+// ---------------------------------------------------------------------------
+export interface SerieAcumulada { nombre: string; color: string; guiones?: boolean; valores: (number | null)[] }
+
+export function GraficoAcumulado({ meses, series }: { meses: string[]; series: SerieAcumulada[] }) {
+  const { ref, ancho } = useAncho<HTMLDivElement>()
+  const [hover, setHover] = useState<number | null>(null)
+  const alto = 260
+  const m = { izq: 52, der: 96, arr: 12, aba: 28 }
+  const valores = series.flatMap((s) => s.valores).filter((v): v is number => v != null)
+  if (meses.length < 2 || !valores.length) return <p className="py-8 text-center text-sm text-muted-foreground">Hacen falta al menos dos meses con precios para ver el aumento acumulado.</p>
+  const lo = Math.min(0, ...valores), hi = Math.max(0, ...valores)
+  const pad = (hi - lo) * 0.08 || 1
+  const ticks = marcas(lo - pad, hi + pad, 5)
+  const y = escala(lo - pad, hi + pad, alto - m.aba, m.arr)
+  const x = escala(0, meses.length - 1, m.izq, ancho - m.der)
+  const camino = (v: (number | null)[]) => {
+    let d = ''
+    let corte = true
+    v.forEach((val, i) => {
+      if (val == null) { corte = true; return }
+      d += `${corte ? 'M' : 'L'}${x(i).toFixed(1)},${y(val).toFixed(1)}`
+      corte = false
+    })
+    return d
+  }
+  // Etiqueta directa al final de cada línea (sin pisarse).
+  const finales = series
+    .map((s) => { const i = s.valores.map((v, k) => (v == null ? -1 : k)).reduce((a, b) => Math.max(a, b), -1); return { s, i, v: i >= 0 ? s.valores[i]! : null } })
+    .filter((f) => f.v != null)
+    .map((f) => ({ ...f, yy: y(f.v!) }))
+    .sort((a, b) => a.yy - b.yy)
+  for (let k = 1; k < finales.length; k++) if (finales[k].yy - finales[k - 1].yy < 14) finales[k].yy = finales[k - 1].yy + 14
+  const cadaCuanto = Math.ceil(meses.length / Math.max(1, Math.floor((ancho - m.izq - m.der) / 64)))
+
+  return (
+    <div ref={ref} className="relative">
+      <svg width={ancho} height={alto} role="img" aria-label="Aumento acumulado contra la inflación"
+        onPointerMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          const i = Math.round(((e.clientX - r.left - m.izq) / (ancho - m.izq - m.der)) * (meses.length - 1))
+          setHover(Math.min(meses.length - 1, Math.max(0, i)))
+        }}
+        onPointerLeave={() => setHover(null)}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={m.izq} x2={ancho - m.der} y1={y(t)} y2={y(t)} stroke={t === 0 ? COLOR.eje : COLOR.grilla} />
+            <text x={m.izq - 8} y={y(t)} dy="0.32em" textAnchor="end" fontSize={11} fill={COLOR.texto}>{t === 0 ? '0%' : pct(t).replace(',0%', '%')}</text>
+          </g>
+        ))}
+        {meses.map((mm, i) => i % cadaCuanto === 0 && (
+          <text key={mm} x={x(i)} y={alto - 8} textAnchor="middle" fontSize={11} fill={COLOR.texto}>{nombreMes(mm).replace(' 20', ' ')}</text>
+        ))}
+        {series.map((s) => (
+          <path key={s.nombre} d={camino(s.valores)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeDasharray={s.guiones ? '5 4' : undefined} />
+        ))}
+        {finales.map((f) => (
+          <g key={f.s.nombre}>
+            <circle cx={x(f.i)} cy={y(f.v!)} r={3.5} fill={f.s.color} />
+            <text x={ancho - m.der + 8} y={f.yy} dy="0.32em" fontSize={11} fill="#191919">{pct(f.v)}</text>
+          </g>
+        ))}
+        {hover != null && (
+          <g>
+            <line x1={x(hover)} x2={x(hover)} y1={m.arr} y2={alto - m.aba} stroke={COLOR.eje} />
+            {series.map((s) => s.valores[hover] != null && (
+              <circle key={s.nombre} cx={x(hover)} cy={y(s.valores[hover]!)} r={4} fill={s.color} stroke="#fff" strokeWidth={2} />
+            ))}
+          </g>
+        )}
+      </svg>
+      {hover != null && (
+        <Tooltip x={x(hover)} y={8} ancho={ancho}>
+          <div className="mb-1 font-medium">{nombreMes(meses[hover])} · acumulado desde {nombreMes(meses[0])}</div>
+          {series.map((s) => (
+            <FilaTip key={s.nombre} color={s.color} nombre={s.nombre} valor={s.valores[hover] == null ? '–' : pct(s.valores[hover])} linea={!s.guiones} />
+          ))}
         </Tooltip>
       )}
     </div>
