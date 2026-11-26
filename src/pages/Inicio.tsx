@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import TarjetaInflacion from '@/components/TarjetaInflacion'
 import { COLOR, GraficoAjustes, GraficoEvolucion, GraficoRangos, Leyenda, type PuntoEvolucion } from '@/components/graficos'
 
 /** Fila de v_estado_listas (0006). */
@@ -420,6 +421,9 @@ export default function Inicio() {
           </CardContent>
         </Card>
       </div>
+
+      <TarjetaInflacion mes={mes} skus={porSku.map((s) => ({ sku: s.sku, descripcion: s.descripcion }))} skuInicial={skuElegido}
+        clientes={clientes.map((c) => ({ id: c.id, nombre: c.nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre))} grupo={grupoSku} />
 
       {/* ---------- Bajo el mínimo ---------- */}
       <Card id="minimo">
