@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { listasGenerales, mensajeError } from '@/lib/datos'
-import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, redondear } from '@/lib/formato'
+import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { exportarExcel, listaVigente, precioConDescuento } from '@/lib/precios'
 import type { ListaGeneral as Lista, Sku } from '@/lib/tipos'
 import { useNiveles } from '@/lib/niveles'
 import { useUsuarios } from '@/lib/usuarios'
 import { AvisoSoloAdmin } from '@/components/AvisoSoloAdmin'
+import { revisarPrecios } from '@/lib/controles'
+import { useCambiosSinGuardar } from '@/lib/cambios'
+import { useConfirmar } from '@/components/Dialogo'
+import { AvisosPrecios } from '@/components/AvisosPrecios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -38,6 +42,7 @@ export default function ListaGeneral() {
   const [estados, setEstados] = useState<EstadoLista[]>([])
   const [estado, setEstado] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
   const [ocupado, setOcupado] = useState(false)
+  const { confirmar, dialogo } = useConfirmar()
 
   async function cargar(mesElegido?: string) {
     const [s, l, g, e] = await Promise.all([
@@ -97,6 +102,17 @@ export default function ListaGeneral() {
     return (f.precio ?? null) !== (g ? Number(g.precio) : null) || (f.minimo ?? null) !== (g?.precio_minimo == null ? null : Number(g.precio_minimo))
   })
   const invalidos = filas.filter((f) => f.invalido)
+  useCambiosSinGuardar(cambios.length > 0)
+
+  /** Cambiar de mes recarga la grilla: si hay cambios sin guardar, se pregunta antes. */
+  async function cambiarMes(nuevo: string) {
+    if (cambios.length && !(await confirmar({
+      titulo: 'Tenés cambios sin guardar',
+      contenido: <p>Tenés {cambios.length} cambio(s) en la lista de {nombreMes(mes)} sin guardar. Si cambiás de mes, se pierden.</p>,
+      aceptar: 'Cambiar sin guardar', cancelar: 'Quedarme', peligro: true,
+    }))) return
+    setMes(nuevo)
+  }
 
   function set(sku: number, campo: keyof Edicion, valor: string) {
     setEd({ ...ed, [sku]: { ...(ed[sku] ?? { precio: '', minimo: '' }), [campo]: valor } })
@@ -135,6 +151,17 @@ export default function ListaGeneral() {
   }
 
   async function guardar() {
+    // Controles: LISTA bajo su mínimo, suba de más de 30% o baja contra la lista anterior (¿error de tipeo?).
+    const avisos = revisarPrecios(cambios.filter((f) => f.precio != null).map((f) => ({
+      etiqueta: `${f.s.sku} ${f.s.descripcion}`, nuevo: f.precio!, anterior: f.anterior, anteriorMes: f.anteriorMes, minimo: f.minimo,
+    })))
+    if (avisos.length && !(await confirmar({
+      titulo: 'Revisá antes de guardar',
+      contenido: <AvisosPrecios avisos={avisos} umbralSuba={UMBRAL_AUMENTO_ATIPICO}
+        intro={<p>Vas a guardar {cambios.length} cambio(s) en la lista de {nombreMes(mes)}. Estos precios de LISTA llaman la atención:</p>}
+        pie={<p className="text-muted-foreground">Recordá que la lista queda como borrador hasta que la publiques.</p>} />,
+      aceptar: 'Guardar igual', cancelar: 'Volver a revisar', peligro: true,
+    }))) return
     setOcupado(true)
     const subir = cambios.filter((f) => f.precio != null).map((f) => ({ mes, sku: f.s.sku, precio: f.precio, precio_minimo: f.minimo }))
     const borrar = cambios.filter((f) => f.precio == null && delMes.has(f.s.sku)).map((f) => f.s.sku)
@@ -171,18 +198,19 @@ export default function ListaGeneral() {
 
   return (
     <div className="grid gap-6">
+      {dialogo}
       <Card>
         <CardHeader>
           <CardTitle>Lista general</CardTitle>
           <CardDescription>
-            Un precio de LISTA por SKU y mes, más el precio mínimo (piso) de referencia. Los demás niveles se calculan con su descuento y se redondean a 1 decimal; los SKUs "sin descuento" valen lo mismo en todos los niveles. Guardá la lista y después publicala: mientras no la publiques es un borrador y no llega a los clientes genéricos ni a Cotizar. Si corregís un precio ya guardado, el valor anterior queda registrado.
+            Un precio de LISTA por SKU y mes, más el precio mínimo (piso) de referencia. Los demás niveles se calculan con su descuento y se redondean a 1 decimal; los SKUs "sin descuento" valen lo mismo en todos los niveles. Guardá la lista y después publicala: mientras no la publiques es un borrador y no llega a los clientes genéricos ni a Cotizar. Si corregís un precio ya guardado, el valor anterior queda registrado. Al guardar te avisa si una LISTA queda bajo su mínimo, sube más de 30% o baja contra la lista anterior.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
           <div className="w-full"><AvisoSoloAdmin que="la lista general" /></div>
           <div className="grid gap-2">
             <Label htmlFor="mes">Mes de la lista</Label>
-            <Input id="mes" type="month" className="w-44" value={aInputMes(mes)} onChange={(e) => e.target.value && setMes(desdeInputMes(e.target.value))} />
+            <Input id="mes" type="month" className="w-44" value={aInputMes(mes)} onChange={(e) => e.target.value && cambiarMes(desdeInputMes(e.target.value))} />
           </div>
           {esAdmin && <div className="grid gap-2">
             <Label htmlFor="aum">% sobre la lista anterior</Label>
@@ -241,6 +269,7 @@ export default function ListaGeneral() {
         <TableBody>
           {filas.map((f) => {
             const varPct = f.precio && f.anterior ? (f.precio / f.anterior - 1) * 100 : null
+            const bajoMinimo = f.precio != null && f.minimo != null && f.precio < f.minimo
             return (
               <TableRow key={f.s.sku}>
                 <TableCell className="font-mono text-xs">{f.s.sku}</TableCell>
@@ -250,9 +279,10 @@ export default function ListaGeneral() {
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">{precio(f.anterior)}</TableCell>
                 <TableCell>
-                  <Input className="h-8 text-right tabular-nums" inputMode="decimal" aria-label={`LISTA ${f.s.sku}`} aria-invalid={f.invalido} value={f.e.precio} onChange={(e) => set(f.s.sku, 'precio', e.target.value)} />
+                  <Input className={bajoMinimo ? 'h-8 border-red-500 bg-red-50 text-right tabular-nums' : 'h-8 text-right tabular-nums'} title={bajoMinimo ? 'La LISTA está por debajo del mínimo' : undefined}
+                    inputMode="decimal" aria-label={`LISTA ${f.s.sku}`} aria-invalid={f.invalido} value={f.e.precio} onChange={(e) => set(f.s.sku, 'precio', e.target.value)} />
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{varPct != null && Math.abs(varPct) >= 0.05 && <Badge variant={varPct < 0 ? 'baja' : 'outline'}>{pct(varPct)}</Badge>}</TableCell>
+                <TableCell className="text-right tabular-nums">{varPct != null && Math.abs(varPct) >= 0.05 && <Badge variant={varPct < 0 ? 'baja' : varPct > UMBRAL_AUMENTO_ATIPICO ? 'alerta' : 'outline'}>{pct(varPct)}</Badge>}</TableCell>
                 {conDescuento.map((n) => (
                   <TableCell key={n.nombre} className="text-right tabular-nums">{f.precio != null ? precio(precioConDescuento(f.precio, n.descuento_pct, f.s.admite_descuento)) : ''}</TableCell>
                 ))}

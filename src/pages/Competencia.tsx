@@ -14,6 +14,33 @@ import { Select } from '@/components/ui/select'
 import { Combobox } from '@/components/ui/combobox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { revisarPrecios } from '@/lib/controles'
+import { useCambiosSinGuardar } from '@/lib/cambios'
+import { useConfirmar } from '@/components/Dialogo'
+import { AvisosPrecios } from '@/components/AvisosPrecios'
+
+/** En competencia el precio es de ellos: no hay mínimo, y avisamos si sube o baja más de esto contra su mes anterior. */
+const UMBRAL_COMPETENCIA = 30
+type Confirmar = ReturnType<typeof useConfirmar>['confirmar']
+
+/** Aviso antes de guardar un precio de la competencia que cambió mucho contra su mes anterior (¿error de tipeo?). */
+async function revisarCompetencia(confirmar: Confirmar, nombre: string, nuevo: number, previo: PrecioCompetencia | undefined) {
+  const avisos = revisarPrecios([{ etiqueta: nombre, nuevo, anterior: previo?.precio, anteriorMes: previo?.mes }],
+    { suba: UMBRAL_COMPETENCIA, baja: UMBRAL_COMPETENCIA, minimo: false })
+  if (!avisos.length) return true
+  return confirmar({
+    titulo: 'Revisá antes de guardar',
+    contenido: <AvisosPrecios avisos={avisos} umbralSuba={UMBRAL_COMPETENCIA} umbralBaja={UMBRAL_COMPETENCIA} />,
+    aceptar: 'Guardar igual', cancelar: 'Volver a revisar', peligro: true,
+  })
+}
+
+/** Último precio de cada producto antes del mes (filas ordenadas del mes más nuevo al más viejo). */
+function previosPorProducto(anteriores: PrecioCompetencia[]) {
+  const m = new Map<number, PrecioCompetencia>()
+  for (const f of anteriores) if (!m.has(f.producto_id)) m.set(f.producto_id, f)
+  return m
+}
 
 const PESTANAS = [
   { id: 'cargar', texto: 'Cargar precios' },
@@ -143,6 +170,8 @@ function Cargar({ competidores, productos, skus, indice, filas, esAdmin, recarga
   const [nuevo, setNuevo] = useState({ producto: '', precio: '', obs: '' })
   const [aviso, setAviso] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { confirmar, dialogo } = useConfirmar()
+  useCambiosSinGuardar(nuevo.precio.trim() !== '')
 
   const cliente = indice.find((c) => String(c.id) === clienteSel)
   const esMercado = clienteSel === MERCADO
@@ -159,6 +188,7 @@ function Cargar({ competidores, productos, skus, indice, filas, esAdmin, recarga
   const delCliente = filas.filter((f) => (esMercado ? f.cliente_id == null : f.cliente_id === clienteId) && (esMercado || cliente))
   const delMes = delCliente.filter((f) => f.mes === mes).sort((a, b) => a.descripcion.localeCompare(b.descripcion) || a.competidor.localeCompare(b.competidor))
   const anteriores = delCliente.filter((f) => f.mes < mes).sort((a, b) => b.mes.localeCompare(a.mes) || a.descripcion.localeCompare(b.descripcion))
+  const previos = previosPorProducto(anteriores)
 
   async function agregar(e: FormEvent) {
     e.preventDefault()
@@ -167,6 +197,8 @@ function Cargar({ competidores, productos, skus, indice, filas, esAdmin, recarga
     if (!nuevo.producto) return setError('Elegí el producto de la competencia.')
     if (!(p > 0)) return setError('Escribí el precio (mayor que cero).')
     const existente = delMes.find((f) => String(f.producto_id) === nuevo.producto)
+    const etiqueta = opcionesProducto.find((o) => o.value === nuevo.producto)?.label ?? ''
+    if (!(await revisarCompetencia(confirmar, etiqueta, p, previos.get(Number(nuevo.producto))))) return
     const datos = { precio: p, observaciones: nuevo.obs.trim() || null }
     const { error } = existente
       ? await supabase.from('precios_competencia').update(datos).eq('id', existente.id)
@@ -205,6 +237,7 @@ function Cargar({ competidores, productos, skus, indice, filas, esAdmin, recarga
 
   return (
     <div className="grid gap-5">
+      {dialogo}
       <div className="flex flex-wrap items-end gap-3">
         <div className="grid gap-1">
           <Label htmlFor="comp-cliente" className="text-xs">Cliente</Label>
@@ -257,7 +290,7 @@ function Cargar({ competidores, productos, skus, indice, filas, esAdmin, recarga
             </div>
             {delMes.length === 0
               ? <p className="text-sm text-muted-foreground">Sin precios de la competencia en este mes.</p>
-              : <TablaPrecios filas={delMes} editable={puede} recargar={recargar} onError={setError} />}
+              : <TablaPrecios filas={delMes} editable={puede} recargar={recargar} onError={setError} previos={previos} confirmar={confirmar} />}
           </div>
 
           {anteriores.length > 0 && (
@@ -272,8 +305,9 @@ function Cargar({ competidores, productos, skus, indice, filas, esAdmin, recarga
   )
 }
 
-function TablaPrecios({ filas, editable, mostrarMes, recargar, onError }: {
+function TablaPrecios({ filas, editable, mostrarMes, recargar, onError, previos, confirmar }: {
   filas: PrecioCompetencia[]; editable: boolean; mostrarMes?: boolean; recargar: () => Promise<void>; onError: (m: string | null) => void
+  previos?: Map<number, PrecioCompetencia>; confirmar?: Confirmar
 }) {
   return (
     <Table>
@@ -288,7 +322,7 @@ function TablaPrecios({ filas, editable, mostrarMes, recargar, onError }: {
       </TableRow></TableHeader>
       <TableBody>
         {filas.map((f) => editable
-          ? <FilaEditable key={`${f.id}-${f.precio}-${f.observaciones}`} f={f} recargar={recargar} onError={onError} />
+          ? <FilaEditable key={`${f.id}-${f.precio}-${f.observaciones}`} f={f} recargar={recargar} onError={onError} previo={previos?.get(f.producto_id)} confirmar={confirmar} />
           : (
             <TableRow key={f.id}>
               {mostrarMes && <TableCell className="whitespace-nowrap">{nombreMes(f.mes)}</TableCell>}
@@ -327,14 +361,19 @@ function CeldasNuestras({ f, precioCompetencia = f.precio }: { f: PrecioCompeten
   )
 }
 
-function FilaEditable({ f, recargar, onError }: { f: PrecioCompetencia; recargar: () => Promise<void>; onError: (m: string | null) => void }) {
+function FilaEditable({ f, recargar, onError, previo, confirmar }: {
+  f: PrecioCompetencia; recargar: () => Promise<void>; onError: (m: string | null) => void
+  previo?: PrecioCompetencia; confirmar?: Confirmar
+}) {
   const [valor, setValor] = useState(txtNumero(f.precio))
   const [obs, setObs] = useState(f.observaciones ?? '')
   const cambio = valor !== txtNumero(f.precio) || obs !== (f.observaciones ?? '')
   const n = aNumero(valor)
+  useCambiosSinGuardar(cambio)
 
   async function guardar() {
     if (!(n > 0)) return onError('El precio tiene que ser mayor que cero.')
+    if (confirmar && n !== f.precio && !(await revisarCompetencia(confirmar, `${f.competidor} · ${f.producto}`, n, previo))) return
     const { error } = await supabase.from('precios_competencia').update({ precio: n, observaciones: obs.trim() || null }).eq('id', f.id)
     if (error) return onError(traducir(error))
     onError(null)

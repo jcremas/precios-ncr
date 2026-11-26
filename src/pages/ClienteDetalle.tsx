@@ -11,6 +11,10 @@ import { nombreModalidad, type Cliente, type ListaGeneral, type PrecioCliente, t
 import { traducirError, type DatosCliente } from '@/lib/clientes'
 import { FormCliente } from '@/components/FormCliente'
 import { ListasEnviadas } from '@/components/ListasEnviadas'
+import { revisarPrecios } from '@/lib/controles'
+import { useCambiosSinGuardar } from '@/lib/cambios'
+import { useConfirmar } from '@/components/Dialogo'
+import { AvisosPrecios } from '@/components/AvisosPrecios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,6 +43,8 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
   const [editados, setEditados] = useState<Record<number, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const { confirmar, dialogo } = useConfirmar()
+  useCambiosSinGuardar(Object.keys(editados).length > 0)
 
   const vigente = useMemo(() => listaVigente(listas, mes), [listas, mes])
   const filas = grilla
@@ -58,10 +64,21 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
       .filter(({ v }) => v > 0)
       .map(({ f, v }) => ({ cliente_id: cliente.id, sku: f.sku, mes, precio: v, origen: v === f.calculado ? 'LISTA' : 'MANUAL' }))
     if (!datos.length) return setError('No hay precios para guardar.')
+    // Control: precios por debajo del mínimo de la lista general (no hay mes anterior con qué comparar).
+    const avisos = revisarPrecios(datos.map((d) => {
+      const f = filas.find((x) => x.sku === d.sku)!
+      return { etiqueta: `${f.sku} ${f.descripcion}`, nuevo: d.precio, minimo: f.minimo == null ? null : Number(f.minimo) }
+    }))
+    if (avisos.length && !(await confirmar({
+      titulo: 'Revisá antes de guardar',
+      contenido: <AvisosPrecios avisos={avisos} umbralSuba={UMBRAL_AUMENTO_ATIPICO} intro={<p>Vas a guardar {datos.length} precio(s) de {nombreMes(mes)} para {cliente.nombre}.</p>} />,
+      aceptar: 'Guardar igual', cancelar: 'Volver a revisar', peligro: true,
+    }))) return
     setGuardando(true)
     const { error } = await supabase.from('precios_cliente').upsert(datos, { onConflict: 'cliente_id,sku,mes' })
     setGuardando(false)
     if (error) return setError(mensajeError(error))
+    setEditados({})
     // Si el cliente no tenía nivel de referencia, queda el descuento con que arrancó.
     if (cliente.nivel_id == null && nivel != null) await supabase.from('clientes').update({ nivel_id: nivel }).eq('id', cliente.id)
     onGuardado()
@@ -69,6 +86,7 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
 
   return (
     <Card className="border-primary/40">
+      {dialogo}
       <CardHeader>
         <CardTitle>Armar la primera lista</CardTitle>
         <CardDescription>
@@ -108,7 +126,9 @@ function ListaInicial({ cliente, skus, grilla, listas, onGuardado }: {
                 <TableCell>{f.descripcion}{f.sinDescuento && <Badge variant="outline" className="ml-2">sin descuento</Badge>}</TableCell>
                 <TableCell className="text-right tabular-nums">{precio(f.lista)}</TableCell>
                 <TableCell>
-                  <Input className="h-8 text-right tabular-nums" inputMode="decimal" aria-label={`Precio inicial ${f.sku}`} value={valor(f)} onChange={(e) => setEditados({ ...editados, [f.sku]: e.target.value })} />
+                  <Input className={f.minimo != null && aNumero(valor(f)) > 0 && aNumero(valor(f)) < Number(f.minimo) ? 'h-8 border-red-500 bg-red-50 text-right tabular-nums' : 'h-8 text-right tabular-nums'}
+                    title={f.minimo != null && aNumero(valor(f)) > 0 && aNumero(valor(f)) < Number(f.minimo) ? 'Está por debajo del precio mínimo' : undefined}
+                    inputMode="decimal" aria-label={`Precio inicial ${f.sku}`} value={valor(f)} onChange={(e) => setEditados({ ...editados, [f.sku]: e.target.value })} />
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">{precio(f.minimo)}</TableCell>
               </TableRow>

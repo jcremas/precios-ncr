@@ -1,4 +1,5 @@
-import { BrowserRouter, Link, Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { createBrowserRouter, createRoutesFromElements, Link, Navigate, NavLink, Outlet, Route, RouterProvider, useLocation } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { configFaltante, supabase } from '@/lib/supabase'
@@ -19,6 +20,8 @@ import Niveles from '@/pages/Niveles'
 import MiCuenta from '@/pages/MiCuenta'
 import { NivelesProvider } from '@/lib/niveles'
 import { UsuariosProvider, useUsuarios } from '@/lib/usuarios'
+import { CambiosProvider, useHayCambios } from '@/lib/cambios'
+import { Dialogo } from '@/components/Dialogo'
 
 const SECCIONES = [
   { a: '/inicio', texto: 'Inicio' },
@@ -34,7 +37,13 @@ const SECCIONES = [
 ]
 
 function Layout() {
+  return <CambiosProvider><Marco /></CambiosProvider>
+}
+
+function Marco() {
   const { session } = useAuth()
+  const hayCambios = useHayCambios()
+  const [confirmarSalir, setConfirmarSalir] = useState(false)
   const { esAdmin, nombreDe, yo, debeCambiarClave, noAutorizado } = useUsuarios()
   const { pathname } = useLocation()
   if (noAutorizado) return <NoAutorizado email={session?.user.email ?? ''} />
@@ -61,10 +70,16 @@ function Layout() {
           <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
             <Link to="/cuenta" className="hover:underline" title={`${session?.user.email} · Mi cuenta (cambiar contraseña)`}>{nombreDe(yo) || session?.user.email}</Link>
             {esAdmin && <span className="rounded bg-accent px-1.5 py-0.5 text-xs">Administrador</span>}
-            <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+            <Button variant="ghost" size="sm" onClick={() => (hayCambios ? setConfirmarSalir(true) : supabase.auth.signOut())}>
               <LogOut /> Salir
             </Button>
           </div>
+          {confirmarSalir && (
+            <Dialogo titulo="Tenés cambios sin guardar" aceptar="Salir sin guardar" cancelar="Quedarme" peligro
+              onAceptar={() => supabase.auth.signOut()} onCancelar={() => setConfirmarSalir(false)}>
+              <p>Si cerrás la sesión, los precios que escribiste y no guardaste se pierden.</p>
+            </Dialogo>
+          )}
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6">
@@ -106,32 +121,35 @@ function FaltaConfig() {
   )
 }
 
+// Router "de datos" (createBrowserRouter): hace falta para avisar al salir con cambios sin guardar (useBlocker).
+const router = createBrowserRouter(createRoutesFromElements(
+  <>
+    <Route path="/login" element={<Login />} />
+    <Route element={<Protegido />}>
+      <Route index element={<Navigate to="/inicio" replace />} />
+      <Route path="/inicio" element={<Inicio />} />
+      <Route path="/ajuste" element={<EnvioMensual />} />
+      <Route path="/envio" element={<Navigate to="/ajuste" replace />} />
+      <Route path="/clientes" element={<Clientes />} />
+      <Route path="/clientes/:id" element={<ClienteDetalle />} />
+      <Route path="/lista" element={<ListaGeneral />} />
+      <Route path="/consultas" element={<Consultas />} />
+      <Route path="/competencia" element={<Competencia />} />
+      <Route path="/cotizar" element={<Cotizar />} />
+      <Route path="/enviar" element={<EnviarListas />} />
+      <Route path="/skus" element={<Skus />} />
+      <Route path="/niveles" element={<Niveles />} />
+      <Route path="/cuenta" element={<MiCuenta />} />
+      <Route path="*" element={<Navigate to="/inicio" replace />} />
+    </Route>
+  </>,
+))
+
 export default function App() {
   if (configFaltante) return <FaltaConfig />
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route element={<Protegido />}>
-            <Route index element={<Navigate to="/inicio" replace />} />
-            <Route path="/inicio" element={<Inicio />} />
-            <Route path="/ajuste" element={<EnvioMensual />} />
-            <Route path="/envio" element={<Navigate to="/ajuste" replace />} />
-            <Route path="/clientes" element={<Clientes />} />
-            <Route path="/clientes/:id" element={<ClienteDetalle />} />
-            <Route path="/lista" element={<ListaGeneral />} />
-            <Route path="/consultas" element={<Consultas />} />
-            <Route path="/competencia" element={<Competencia />} />
-            <Route path="/cotizar" element={<Cotizar />} />
-            <Route path="/enviar" element={<EnviarListas />} />
-            <Route path="/skus" element={<Skus />} />
-            <Route path="/niveles" element={<Niveles />} />
-            <Route path="/cuenta" element={<MiCuenta />} />
-            <Route path="*" element={<Navigate to="/inicio" replace />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </AuthProvider>
   )
 }
