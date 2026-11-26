@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, CircleDashed, Download } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { mensajeError, traerTodo } from '@/lib/datos'
-import { aInputMes, desdeInputMes, mesActual, nombreMes, pct, precio, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
+import { aInputMes, mesActual, nombreMes, pct, precio, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { exportarExcel, mediana } from '@/lib/precios'
 import { useNiveles } from '@/lib/niveles'
 import { useUsuarios } from '@/lib/usuarios'
 import { nombreModalidad, type IndiceCliente, type PrecioCliente, type PrecioDetalle } from '@/lib/tipos'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
@@ -78,17 +77,20 @@ export default function Inicio() {
   const [detalle, setDetalle] = useState<PrecioDetalle[]>([])
   const [anteriores, setAnteriores] = useState<PrecioCliente[]>([])
   const [cargando, setCargando] = useState(true)
+  const [primerMes, setPrimerMes] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Clientes y estado de las listas generales (pocas filas).
   useEffect(() => {
     ;(async () => {
       try {
-        const [i, l] = await Promise.all([
+        const [i, l, p] = await Promise.all([
           traerTodo<IndiceCliente>((d, h) => supabase.from('v_indice_clientes').select('*').order('id').range(d, h)),
           supabase.from('v_estado_listas').select('*').order('mes'),
+          supabase.from('precios_cliente').select('mes').order('mes').limit(1),
         ])
         if (l.error) throw l.error
+        setPrimerMes((p.data?.[0]?.mes as string | undefined) ?? null)
         setIndice(i)
         setListas((l.data ?? []) as EstadoLista[])
       } catch (e) {
@@ -124,6 +126,18 @@ export default function Inicio() {
       .catch((e) => vigente && setError(mensajeError(e)))
     return () => { vigente = false }
   }, [mes, claveEsp, indice.length])
+
+  // Meses para elegir: desde el primero con precios (o con lista) hasta el más
+  // nuevo entre el mes actual, las listas cargadas y los precios guardados.
+  const meses = useMemo(() => {
+    const candidatos = [mesActual(), ...listas.map((l) => l.mes), ...indice.map((c) => c.ultimo_mes).filter((m): m is string => !!m)]
+    const ultimo = candidatos.reduce((a, b) => (b > a ? b : a))
+    const primero = [primerMes, ...listas.map((l) => l.mes)].filter((m): m is string => !!m).reduce((a, b) => (b < a ? b : a), ultimo)
+    const salida: string[] = []
+    for (let m = ultimo; m >= primero && salida.length < 120; m = restarMeses(m, 1)) salida.push(m)
+    return salida
+  }, [listas, indice, primerMes])
+  const posMes = meses.indexOf(mes)
 
   // Hasta correr 0013 no hay dueños: se ve todo.
   const hayDuenos = indice.some((c) => c.dueno !== undefined)
@@ -270,7 +284,16 @@ export default function Inicio() {
         )}
         <div className="grid gap-1">
           <Label htmlFor="mes" className="text-xs">Mes</Label>
-          <Input id="mes" type="month" className="w-40" value={aInputMes(mes)} onChange={(e) => e.target.value && setMes(desdeInputMes(e.target.value))} />
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="size-9" aria-label="Mes anterior" title="Mes anterior"
+              disabled={posMes < 0 || posMes >= meses.length - 1} onClick={() => setMes(meses[posMes + 1])}><ChevronLeft /></Button>
+            <Select id="mes" className="w-32" value={mes} onChange={(e) => setMes(e.target.value)}>
+              {!meses.includes(mes) && <option value={mes}>{nombreMes(mes)}</option>}
+              {meses.map((m) => <option key={m} value={m}>{nombreMes(m)}</option>)}
+            </Select>
+            <Button variant="outline" size="icon" className="size-9" aria-label="Mes siguiente" title="Mes siguiente"
+              disabled={posMes <= 0} onClick={() => setMes(meses[posMes - 1])}><ChevronRight /></Button>
+          </div>
         </div>
       </div>
 
