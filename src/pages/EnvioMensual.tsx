@@ -5,6 +5,10 @@ import { grillasActivas, listasGenerales, mensajeError, preciosDeClientes } from
 import { aInputMes, desdeInputMes, mesActual, mesSiguiente, nombreMes, pct, precio, redondear, UMBRAL_AUMENTO_ATIPICO } from '@/lib/formato'
 import { listaVigente } from '@/lib/precios'
 import { useUsuarios } from '@/lib/usuarios'
+import { revisarPrecios } from '@/lib/controles'
+import { useCambiosSinGuardar } from '@/lib/cambios'
+import { useConfirmar } from '@/components/Dialogo'
+import { AvisosPrecios } from '@/components/AvisosPrecios'
 import type { Cliente, ListaGeneral, Origen, PrecioCliente, Sku } from '@/lib/tipos'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +51,7 @@ export default function EnvioMensual() {
   const [estado, setEstado] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
+  const { confirmar, dialogo } = useConfirmar()
 
   async function cargar() {
     setCargando(true)
@@ -165,13 +170,35 @@ export default function EnvioMensual() {
   })
   const correcciones = aGuardar.filter(({ f }) => f.yaCargado != null).length
 
+  useCambiosSinGuardar(aGuardar.length > 0)
+
+  /** Cambiar de cliente o de mes recarga la grilla: si hay precios sin guardar, se pregunta antes. */
+  async function cambiarSinPerder(aplicar: () => void) {
+    if (aGuardar.length && !(await confirmar({
+      titulo: 'Tenés cambios sin guardar',
+      contenido: <p>Tenés {aGuardar.length} precio(s) de {nombreMes(mesNuevo)} sin guardar. Si cambiás de cliente o de mes, se pierden.</p>,
+      aceptar: 'Cambiar sin guardar', cancelar: 'Quedarme', peligro: true,
+    }))) return
+    aplicar()
+  }
+
   async function guardar() {
     if (!aGuardar.length) return
-    const msg =
-      `Vas a guardar ${aGuardar.length} precio(s) para ${nombreMes(mesNuevo)}.` +
-      (correcciones ? `\n\n${correcciones} ya tenían precio en ese mes: se corrigen y el valor anterior queda registrado.` : '') +
-      '\n\n¿Continuar?'
-    if (!window.confirm(msg)) return
+    // Controles: bajo el mínimo, suba de más de 30% o baja contra el último precio (¿error de tipeo?).
+    const avisos = revisarPrecios(aGuardar.map(({ f, v }) => ({
+      etiqueta: `${seleccion === TODOS ? `${f.cliente.nombre} · ` : ''}${f.sku} ${f.descripcion}`,
+      nuevo: v, anterior: f.base, anteriorMes: f.baseMes, minimo: f.minimo,
+    })))
+    const intro = (
+      <p>
+        Vas a guardar {aGuardar.length} precio(s) para {nombreMes(mesNuevo)}.
+        {correcciones > 0 && ` ${correcciones} ya tenían precio en ese mes: se corrigen y el valor anterior queda registrado.`}
+      </p>
+    )
+    const ok = await confirmar(avisos.length
+      ? { titulo: 'Revisá antes de guardar', contenido: <AvisosPrecios avisos={avisos} intro={intro} umbralSuba={UMBRAL_AUMENTO_ATIPICO} />, aceptar: 'Guardar igual', cancelar: 'Volver a revisar', peligro: true }
+      : { titulo: `Guardar ${nombreMes(mesNuevo)}`, contenido: intro, aceptar: 'Guardar' })
+    if (!ok) return
     setGuardando(true)
     const { error } = await supabase.from('precios_cliente').upsert(
       aGuardar.map(({ f, v }) => ({ cliente_id: f.cliente.id, sku: f.sku, mes: mesNuevo, precio: v, origen: origenes[f.clave] ?? 'MANUAL' })),
@@ -186,17 +213,18 @@ export default function EnvioMensual() {
 
   return (
     <div className="grid gap-6">
+      {dialogo}
       <Card>
         <CardHeader>
           <CardTitle>Ajuste mensual</CardTitle>
           <CardDescription>
-            Para tus clientes especiales (los de otros usuarios los ajusta su dueño; los genéricos se actualizan al publicar la lista general). Elegí un cliente o TODOS, el mes y, si querés, un % de aumento sobre el último precio. A la derecha tenés la lista general y el precio mínimo: si un precio queda por debajo del mínimo se marca en rojo.
+            Para tus clientes especiales (los de otros usuarios los ajusta su dueño; los genéricos se actualizan al publicar la lista general). Elegí un cliente o TODOS, el mes y, si querés, un % de aumento sobre el último precio. A la derecha tenés la lista general y el precio mínimo: si un precio queda por debajo del mínimo se marca en rojo. Al guardar te avisa si algo quedó bajo el mínimo, sube más de 30% o baja respecto del último precio, por si es un error de tipeo.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
           <div className="grid gap-2">
             <Label htmlFor="cliente">Cliente</Label>
-            <Combobox id="cliente" value={seleccion} onChange={setSeleccion} disabled={cargando}
+            <Combobox id="cliente" value={seleccion} onChange={(v) => v !== seleccion && cambiarSinPerder(() => setSeleccion(v))} disabled={cargando}
               placeholder={cargando ? 'Cargando…' : 'Escribí parte del nombre o del código…'}
               opciones={[
                 { value: TODOS, label: `TODOS mis clientes especiales (${clientes.length})` },
@@ -206,7 +234,7 @@ export default function EnvioMensual() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="mes">Mes a cargar</Label>
-            <Input id="mes" type="month" value={aInputMes(mesNuevo)} onChange={(e) => e.target.value && setMesNuevo(desdeInputMes(e.target.value))} />
+            <Input id="mes" type="month" value={aInputMes(mesNuevo)} onChange={(e) => { const v = e.target.value; if (v) cambiarSinPerder(() => setMesNuevo(desdeInputMes(v))) }} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="aumento">% de aumento</Label>
