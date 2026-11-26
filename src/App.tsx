@@ -14,6 +14,7 @@ import Skus from '@/pages/Skus'
 import ListaGeneral from '@/pages/ListaGeneral'
 import Consultas from '@/pages/Consultas'
 import Inicio from '@/pages/Inicio'
+import Competencia from '@/pages/Competencia'
 import Niveles from '@/pages/Niveles'
 import MiCuenta from '@/pages/MiCuenta'
 import { NivelesProvider } from '@/lib/niveles'
@@ -25,6 +26,7 @@ const SECCIONES = [
   { a: '/lista', texto: 'Lista general' },
   { a: '/clientes', texto: 'Clientes' },
   { a: '/consultas', texto: 'Consultas' },
+  { a: '/competencia', texto: 'Competencia' },
   { a: '/cotizar', texto: 'Cotizar' },
   { a: '/enviar', texto: 'Enviar listas' },
   { a: '/skus', texto: 'SKUs' },
@@ -120,6 +122,7 @@ export default function App() {
             <Route path="/clientes/:id" element={<ClienteDetalle />} />
             <Route path="/lista" element={<ListaGeneral />} />
             <Route path="/consultas" element={<Consultas />} />
+            <Route path="/competencia" element={<Competencia />} />
             <Route path="/cotizar" element={<Cotizar />} />
             <Route path="/enviar" element={<EnviarListas />} />
             <Route path="/skus" element={<Skus />} />

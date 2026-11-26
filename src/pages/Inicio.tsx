@@ -511,47 +511,58 @@ export default function Inicio() {
         </CardContent>
       </Card>
 
-      <TarjetaCompetencia mes={mes} filas={filas} />
+      <TarjetaCompetencia mes={mes} clientes={new Set(porId.keys())} />
     </div>
   )
 }
 
-/** Lugar reservado para la competencia: lee la tabla precios_competencia
- *  (existe desde 0001) y compara con nuestros precios del mes. Cuando esté la
- *  pantalla de competencia, se puede reemplazar por un resumen más completo. */
-function TarjetaCompetencia({ mes, filas }: { mes: string; filas: PrecioDetalle[] }) {
-  const [datos, setDatos] = useState<{ cliente_id: number | null; sku: number; precio: number; competidor: string }[] | null>(null)
+/** Competencia del mes (módulo 0015): lee v_competencia, que ya trae
+ *  nuestro precio a ese cliente. Solo cuenta los clientes del alcance elegido. */
+function TarjetaCompetencia({ mes, clientes }: { mes: string; clientes: Set<number> }) {
+  type Fila = { cliente_id: number | null; competidor: string; precio: number; nuestro_precio: number | null }
+  const [datos, setDatos] = useState<Fila[] | null>(null)
   const [noDisponible, setNoDisponible] = useState(false)
   useEffect(() => {
     let vigente = true
-    supabase.from('precios_competencia').select('cliente_id, sku, precio, competidor').eq('mes', mes).order('id').limit(1000)
-      .then(({ data, error }) => {
+    traerTodo<Fila>((d, h) => supabase.from('v_competencia').select('cliente_id, competidor, precio, nuestro_precio').eq('mes', mes).order('id').range(d, h))
+      .then((rows) => {
         if (!vigente) return
-        setNoDisponible(!!error)
-        setDatos(((data ?? []) as { cliente_id: number | null; sku: number; precio: number; competidor: string }[]).map((d) => ({ ...d, precio: Number(d.precio) })))
+        setNoDisponible(false)
+        setDatos(rows.map((r) => ({ ...r, precio: Number(r.precio), nuestro_precio: r.nuestro_precio == null ? null : Number(r.nuestro_precio) })))
       })
+      .catch(() => vigente && setNoDisponible(true))
     return () => { vigente = false }
   }, [mes])
 
-  const nuestro = new Map(filas.map((f) => [`${f.cliente_id}-${f.sku}`, f.precio]))
-  const comparables = (datos ?? []).filter((d) => d.cliente_id != null && nuestro.has(`${d.cliente_id}-${d.sku}`))
-  const masCaros = comparables.filter((d) => nuestro.get(`${d.cliente_id}-${d.sku}`)! > d.precio)
+  const delAlcance = (datos ?? []).filter((d) => d.cliente_id != null && clientes.has(d.cliente_id))
+  const comparables = delAlcance.filter((d) => d.nuestro_precio != null && d.precio > 0)
+  const brechas = comparables.map((d) => (d.nuestro_precio! / d.precio - 1) * 100)
+  const masCaros = brechas.filter((b) => b > 0).length
+  const brechaMediana = mediana(brechas)
 
   return (
-    <Card id="competencia" className="border-dashed">
-      <CardHeader>
-        <CardTitle>Competencia · {nombreMes(mes)}</CardTitle>
-        <CardDescription>Precios de la competencia que cargues por cliente, comparados con los nuestros.</CardDescription>
+    <Card id="competencia">
+      <CardHeader className="flex flex-wrap items-start justify-between gap-2">
+        <div className="grid gap-1.5">
+          <CardTitle>Competencia · {nombreMes(mes)}</CardTitle>
+          <CardDescription>Precios de la competencia cargados para estos clientes, comparados con lo que les cobramos.</CardDescription>
+        </div>
+        <Button asChild variant="outline" size="sm"><Link to="/competencia">Ir a Competencia</Link></Button>
       </CardHeader>
       <CardContent className="text-sm">
-        {noDisponible || datos == null ? (
-          <p className="text-muted-foreground">Todavía no está disponible.</p>
-        ) : !datos.length ? (
-          <p className="text-muted-foreground">No hay precios de competencia cargados para {nombreMes(mes)}.</p>
+        {noDisponible ? (
+          <p className="text-muted-foreground">Para ver este resumen hay que correr la migración 0015 (Competencia) en Supabase.</p>
+        ) : datos == null ? (
+          <p className="text-muted-foreground">Cargando…</p>
+        ) : !delAlcance.length ? (
+          <p className="text-muted-foreground">No hay precios de competencia de {nombreMes(mes)} para estos clientes.</p>
         ) : (
           <p>
-            {datos.length} precio(s) de competencia cargados · {new Set(datos.map((d) => d.competidor)).size} competidor(es).
-            {comparables.length > 0 && <> De {comparables.length} comparables con un cliente, <strong className={masCaros.length ? 'text-red-700' : ''}>en {masCaros.length} estamos más caros</strong>.</>}
+            {delAlcance.length} precio(s) de competencia · {new Set(delAlcance.map((d) => d.competidor)).size} competidor(es).
+            {comparables.length > 0 && (
+              <> De {comparables.length} comparables, <strong className={masCaros ? 'text-red-700' : ''}>en {masCaros} estamos más caros</strong>
+                {brechaMediana != null && <> · nosotros vs. ellos (mediana): <strong>{pct(brechaMediana)}</strong></>}.</>
+            )}
           </p>
         )}
       </CardContent>

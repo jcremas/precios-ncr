@@ -6,6 +6,7 @@
 -- =====================================================================
 
 -- Vistas
+drop view if exists public.v_competencia cascade;
 drop view if exists public.v_estado_listas cascade;
 drop view if exists public.v_precios_detalle cascade;
 drop view if exists public.v_lista_niveles cascade;
@@ -18,6 +19,8 @@ drop view if exists public.v_ultimo_precio cascade;
 
 -- Tablas (incluye nombres de versiones anteriores)
 drop table if exists public.precios_competencia cascade;
+drop table if exists public.productos_competencia cascade;
+drop table if exists public.competidores cascade;
 drop table if exists public.precios_cliente_cambios cascade;
 drop table if exists public.precios_cliente cascade;
 drop table if exists public.listas_publicadas cascade;
@@ -53,6 +56,8 @@ drop function if exists public.preparar_grilla_especial() cascade;
 drop function if exists public.preparar_grilla() cascade;
 drop function if exists public.agregar_sku_a_genericos() cascade;
 drop function if exists public.clave_cambiada() cascade;
+drop function if exists public.completar_precio_competencia() cascade;
+drop function if exists public.propagar_producto_competencia() cascade;
 drop function if exists public.transferir_cliente(bigint, text) cascade;
 drop function if exists public.es_dueno(bigint) cascade;
 drop function if exists public.es_admin() cascade;
